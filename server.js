@@ -1,109 +1,188 @@
 const express = require("express");
 const cors = require("cors");
-const fs = require("fs");
 const { v4: uuidv4 } = require("uuid");
+const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+// 🔥 SUPABASE CONNECT
+const supabase = createClient(
+  "sb_publishable_gOocpQ9Tn_pwJzt2nE1CtQ_5o3MxUrV",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwanNvYXFkYWtpeWRncmxsYmVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwNzE0MDIsImV4cCI6MjA5MzY0NzQwMn0.1lr9EGduqw6TrknRzZhFmMwVGJZdkmBKQGysd1Zbp8o"
+);
+
+// ===============================
+// CREATE ACCESS TOKEN
+// ===============================
+app.post("/create-access", async (req, res) => {
+
+  try {
+
+    // 🔐 auto token generate
+    const token = uuidv4();
+
+    // ⏰ 15 min expiry
+    const expiry = Date.now() + (15 * 60 * 1000);
+
+    // 💾 save in database
+    const { error } = await supabase
+      .from("access_tokens")
+      .insert([
+        {
+          token,
+          used: false,
+          expiry
+        }
+      ]);
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    // ✅ send token
+    res.json({
+      success: true,
+      token
+    });
+
+  } catch (err) {
+
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+
+  }
+
+});
+
+// ===============================
+// VERIFY TOKEN
+// ===============================
+app.get("/verify-token", async (req, res) => {
+
+  try {
+
+    const token = req.query.token;
+
+    if (!token) {
+      return res.json({
+        valid: false
+      });
+    }
+
+    // 🔎 find token
+    const { data, error } = await supabase
+      .from("access_tokens")
+      .select("*")
+      .eq("token", token)
+      .single();
+
+    if (error || !data) {
+      return res.json({
+        valid: false
+      });
+    }
+
+    // ❌ already used
+    if (data.used) {
+      return res.json({
+        valid: false,
+        message: "Already used"
+      });
+    }
+
+    // ❌ expired
+    if (Date.now() > data.expiry) {
+      return res.json({
+        valid: false,
+        message: "Expired"
+      });
+    }
+
+    // ✅ valid
+    res.json({
+      valid: true
+    });
+
+  } catch (err) {
+
+    res.status(500).json({
+      valid: false,
+      message: err.message
+    });
+
+  }
+
+});
+
+// ===============================
+// CONSUME TOKEN
+// ===============================
+app.post("/consume-token", async (req, res) => {
+
+  try {
+
+    const { token } = req.body;
+
+    if (!token) {
+      return res.json({
+        success: false
+      });
+    }
+
+    // 🔒 mark used
+    const { error } = await supabase
+      .from("access_tokens")
+      .update({
+        used: true
+      })
+      .eq("token", token);
+
+    if (error) {
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.json({
+      success: true
+    });
+
+  } catch (err) {
+
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+
+  }
+
+});
+
+// ===============================
+// ROOT CHECK
+// ===============================
+app.get("/", (req, res) => {
+
+  res.send("Vault Backend Running ✅");
+
+});
+
+// ===============================
+// START SERVER
+// ===============================
 const PORT = process.env.PORT || 3000;
 
-const FILE = "tokens.json";
+app.listen(PORT, () => {
 
-// read db
-function readTokens(){
-  if(!fs.existsSync(FILE)){
-    fs.writeFileSync(FILE, "[]");
-  }
+  console.log("Server Running On Port " + PORT);
 
-  return JSON.parse(fs.readFileSync(FILE));
-}
-
-// save db
-function saveTokens(data){
-  fs.writeFileSync(FILE, JSON.stringify(data,null,2));
-}
-
-// create token after payment
-app.post("/create-access", (req,res)=>{
-
-  const token = uuidv4();
-
-  const tokens = readTokens();
-
-  tokens.push({
-    token,
-    used:false,
-    expiry: Date.now() + (15*60*1000)
-  });
-
-  saveTokens(tokens);
-
-  res.json({
-    success:true,
-    token
-  });
-
-});
-
-// verify token
-app.get("/verify-token", (req,res)=>{
-
-  const { token } = req.query;
-
-  const tokens = readTokens();
-
-  const found = tokens.find(t=>t.token===token);
-
-  if(!found){
-    return res.json({
-      valid:false,
-      message:"Invalid token"
-    });
-  }
-
-  if(found.used){
-    return res.json({
-      valid:false,
-      message:"Already used"
-    });
-  }
-
-  if(Date.now() > found.expiry){
-    return res.json({
-      valid:false,
-      message:"Expired"
-    });
-  }
-
-  res.json({
-    valid:true
-  });
-
-});
-
-// consume token
-app.post("/consume-token",(req,res)=>{
-
-  const { token } = req.body;
-
-  const tokens = readTokens();
-
-  const found = tokens.find(t=>t.token===token);
-
-  if(found){
-    found.used = true;
-    saveTokens(tokens);
-  }
-
-  res.json({
-    success:true
-  });
-
-});
-
-app.listen(PORT,()=>{
-  console.log("Server Running");
 });
