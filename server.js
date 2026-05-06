@@ -176,26 +176,13 @@ app.post("/webhook", async (req, res) => {
 
     console.log("Webhook Data:", req.body);
 
-    // 🔥 PAYMENT STATUS
-    const paymentStatus = req.body.status;
-
-    // ❌ PAYMENT FAILED
-    if (paymentStatus !== "success") {
-
-      return res.status(400).json({
-        success: false,
-        message: "Payment not successful"
-      });
-
-    }
-
-    // 🔐 AUTO TOKEN GENERATE
+    // 🔐 token generate
     const token = uuidv4();
 
-    // ⏰ TOKEN EXPIRY
+    // ⏰ expiry
     const expiry = Date.now() + (15 * 60 * 1000);
 
-    // 💾 SAVE TOKEN
+    // 💾 save token
     const { error } = await supabase
       .from("access_tokens")
       .insert([
@@ -206,7 +193,7 @@ app.post("/webhook", async (req, res) => {
         }
       ]);
 
-    // ❌ DATABASE ERROR
+    // ❌ db error
     if (error) {
 
       return res.status(500).json({
@@ -216,19 +203,18 @@ app.post("/webhook", async (req, res) => {
 
     }
 
-    // ✅ SUCCESS RESPONSE
-    res.json({
+    // ✅ ALWAYS SUCCESS RESPONSE
+    return res.status(200).json({
       success: true,
-      token,
-      redirect_url:
-        "https://reelsbundles.github.io/download.html?token=" + token
+      message: "Webhook Received",
+      token
     });
 
   } catch (err) {
 
     console.log(err);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: err.message
     });
@@ -236,7 +222,6 @@ app.post("/webhook", async (req, res) => {
   }
 
 });
-
 // ===============================
 // ROOT CHECK
 // ===============================
