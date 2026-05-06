@@ -166,6 +166,76 @@ app.post("/consume-token", async (req, res) => {
   }
 
 });
+// ===============================
+// PAYMENT WEBHOOK
+// ===============================
+
+app.post("/webhook", async (req, res) => {
+
+  try {
+
+    console.log("Webhook Data:", req.body);
+
+    // 🔥 PAYMENT STATUS
+    const paymentStatus = req.body.status;
+
+    // ❌ PAYMENT FAILED
+    if (paymentStatus !== "success") {
+
+      return res.status(400).json({
+        success: false,
+        message: "Payment not successful"
+      });
+
+    }
+
+    // 🔐 AUTO TOKEN GENERATE
+    const token = uuidv4();
+
+    // ⏰ TOKEN EXPIRY
+    const expiry = Date.now() + (15 * 60 * 1000);
+
+    // 💾 SAVE TOKEN
+    const { error } = await supabase
+      .from("access_tokens")
+      .insert([
+        {
+          token,
+          used: false,
+          expiry
+        }
+      ]);
+
+    // ❌ DATABASE ERROR
+    if (error) {
+
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+
+    }
+
+    // ✅ SUCCESS RESPONSE
+    res.json({
+      success: true,
+      token,
+      redirect_url:
+        "https://reelsbundles.github.io/download.html?token=" + token
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+
+  }
+
+});
 
 // ===============================
 // ROOT CHECK
