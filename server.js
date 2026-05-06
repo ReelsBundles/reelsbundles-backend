@@ -10,8 +10,8 @@ app.use(express.json());
 
 // 🔥 SUPABASE CONNECT
 const supabase = createClient(
-  "sb_publishable_gOocpQ9Tn_pwJzt2nE1CtQ_5o3MxUrV",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwanNvYXFkYWtpeWRncmxsYmVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgwNzE0MDIsImV4cCI6MjA5MzY0NzQwMn0.1lr9EGduqw6TrknRzZhFmMwVGJZdkmBKQGysd1Zbp8o"
+  "https://bpjsoaqdakiydgrllber.supabase.co",
+  "sb_publishable_gOocpQ9Tn_pwJzt2nE1CtQ_5o3MxUrV"
 );
 
 // ===============================
