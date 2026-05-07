@@ -212,9 +212,9 @@ app.post("/webhook", async (req, res) => {
 
     // 🔥 PAYMENT STATUS
     const paymentStatus =
-      body?.data?.payment?.payment_status ||
-      body?.payment_status ||
-      body?.data?.payment_status;
+     body?.data?.order?.order_status ||
+     body?.order_status ||
+     body?.data?.order_status;
 
     console.log("ORDER ID:", orderId);
     console.log("PAYMENT STATUS:", paymentStatus);
