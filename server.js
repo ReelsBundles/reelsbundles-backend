@@ -12,8 +12,8 @@ app.use(express.json());
 // SUPABASE CONNECT
 // ===============================
 const supabase = createClient(
-  "https://bpjsoaqdakiydgrllber.supabase.co",
-  "sb_publishable_gOocpQ9Tn_pwJzt2nE1CtQ_5o3MxUrV"
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SECRET
 );
 
 // ===============================
