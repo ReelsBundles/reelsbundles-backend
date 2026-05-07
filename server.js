@@ -230,7 +230,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     // ✅ SUCCESS PAYMENT
-     if(paymentStatus === "PAID"){{
+     if(paymentStatus === "PAID"){
 
       // 💾 SAVE VERIFIED PAYMENT
       await supabase
