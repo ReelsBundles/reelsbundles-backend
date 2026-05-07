@@ -190,15 +190,6 @@ app.post("/consume-token", async (req, res) => {
 });
 
 // ===============================
-// WEBHOOK TEST ROUTE
-// ===============================
-app.get("/webhook", (req, res) => {
-
-  res.send("Webhook Working ✅");
-
-});
-
-// ===============================
 // CASHFREE WEBHOOK
 // ===============================
 app.post("/webhook", async (req, res) => {
@@ -210,30 +201,39 @@ app.post("/webhook", async (req, res) => {
       JSON.stringify(req.body, null, 2)
     );
 
-    // 🔥 CASHFREE DATA
-    const data = req.body.data;
+    // 🔥 FULL BODY
+    const body = req.body;
 
     // 🔥 ORDER ID
-    const orderId = data?.order?.order_id;
+    const orderId =
+      body?.data?.order?.order_id ||
+      body?.order_id ||
+      body?.data?.order_id;
 
     // 🔥 PAYMENT STATUS
     const paymentStatus =
-      data?.payment?.payment_status;
+      body?.data?.payment?.payment_status ||
+      body?.payment_status ||
+      body?.data?.payment_status;
 
-    // ❌ invalid payment
-    if (
-      !orderId ||
-      paymentStatus !== "SUCCESS"
-    ) {
+    console.log("ORDER ID:", orderId);
+    console.log("PAYMENT STATUS:", paymentStatus);
+
+    // ❌ no order id
+    if(!orderId){
 
       return res.status(200).json({
-        success: false
+        success:false,
+        message:"No Order ID"
       });
 
     }
 
-    // ✅ STORE VERIFIED PAYMENT
-    await supabase
+    // ✅ SUCCESS PAYMENT
+    if(paymentStatus === "SUCCESS"){
+
+      // 💾 SAVE VERIFIED PAYMENT
+      await supabase
       .from("payments")
       .upsert([
         {
@@ -242,9 +242,13 @@ app.post("/webhook", async (req, res) => {
         }
       ]);
 
-    // ✅ SUCCESS
+      console.log("PAYMENT VERIFIED ✅");
+
+    }
+
+    // ✅ ALWAYS SUCCESS RESPONSE
     return res.status(200).json({
-      success: true
+      success:true
     });
 
   } catch (err) {
@@ -252,8 +256,8 @@ app.post("/webhook", async (req, res) => {
     console.log(err);
 
     return res.status(500).json({
-      success: false,
-      message: err.message
+      success:false,
+      message:err.message
     });
 
   }
