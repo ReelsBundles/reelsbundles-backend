@@ -210,12 +210,41 @@ app.post("/webhook", async (req, res) => {
       JSON.stringify(req.body, null, 2)
     );
 
-    // ✅ ALWAYS RETURN SUCCESS
-    // taaki Cashfree test fail na kare
+    // 🔥 CASHFREE DATA
+    const data = req.body.data;
 
+    // 🔥 ORDER ID
+    const orderId = data?.order?.order_id;
+
+    // 🔥 PAYMENT STATUS
+    const paymentStatus =
+      data?.payment?.payment_status;
+
+    // ❌ invalid payment
+    if (
+      !orderId ||
+      paymentStatus !== "SUCCESS"
+    ) {
+
+      return res.status(200).json({
+        success: false
+      });
+
+    }
+
+    // ✅ STORE VERIFIED PAYMENT
+    await supabase
+      .from("payments")
+      .upsert([
+        {
+          order_id: orderId,
+          paid: true
+        }
+      ]);
+
+    // ✅ SUCCESS
     return res.status(200).json({
-      success: true,
-      message: "Webhook Received Successfully"
+      success: true
     });
 
   } catch (err) {
@@ -230,7 +259,6 @@ app.post("/webhook", async (req, res) => {
   }
 
 });
-
 // ===============================
 // ROOT CHECK
 // ===============================
