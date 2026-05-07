@@ -8,7 +8,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔥 SUPABASE CONNECT
+// ===============================
+// SUPABASE CONNECT
+// ===============================
 const supabase = createClient(
   "https://bpjsoaqdakiydgrllber.supabase.co",
   "sb_publishable_gOocpQ9Tn_pwJzt2nE1CtQ_5o3MxUrV"
@@ -21,172 +23,10 @@ app.post("/create-access", async (req, res) => {
 
   try {
 
-    // 🔐 auto token generate
+    // 🔐 generate token
     const token = uuidv4();
 
-    // ⏰ 15 min expiry
-    const expiry = Date.now() + (15 * 60 * 1000);
-
-    // 💾 save in database
-    const { error } = await supabase
-      .from("access_tokens")
-      .insert([
-        {
-          token,
-          used: false,
-          expiry
-        }
-      ]);
-
-    if (error) {
-      return res.status(500).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    // ✅ send token
-    res.json({
-      success: true,
-      token
-    });
-
-  } catch (err) {
-
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
-
-  }
-
-});
-
-// ===============================
-// VERIFY TOKEN
-// ===============================
-app.get("/verify-token", async (req, res) => {
-
-  try {
-
-    const token = req.query.token;
-
-    if (!token) {
-      return res.json({
-        valid: false
-      });
-    }
-
-    // 🔎 find token
-    const { data, error } = await supabase
-      .from("access_tokens")
-      .select("*")
-      .eq("token", token)
-      .single();
-
-    if (error || !data) {
-      return res.json({
-        valid: false
-      });
-    }
-
-    // ❌ already used
-    if (data.used) {
-      return res.json({
-        valid: false,
-        message: "Already used"
-      });
-    }
-
-    // ❌ expired
-    if (Date.now() > data.expiry) {
-      return res.json({
-        valid: false,
-        message: "Expired"
-      });
-    }
-
-    // ✅ valid
-    res.json({
-      valid: true
-    });
-
-  } catch (err) {
-
-    res.status(500).json({
-      valid: false,
-      message: err.message
-    });
-
-  }
-
-});
-
-// ===============================
-// CONSUME TOKEN
-// ===============================
-app.post("/consume-token", async (req, res) => {
-
-  try {
-
-    const { token } = req.body;
-
-    if (!token) {
-      return res.json({
-        success: false
-      });
-    }
-
-    // 🔒 mark used
-    const { error } = await supabase
-      .from("access_tokens")
-      .update({
-        used: true
-      })
-      .eq("token", token);
-
-    if (error) {
-      return res.status(500).json({
-        success: false,
-        message: error.message
-      });
-    }
-
-    res.json({
-      success: true
-    });
-
-  } catch (err) {
-
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
-
-  }
-
-});
-// ===============================
-// PAYMENT WEBHOOK
-// ===============================
-
-// GET TEST
-app.get("/webhook",(req,res)=>{
-
-  res.send("Webhook Working ✅");
-
-});
-// REAL WEBHOOK
-app.post("/webhook", async (req, res) => {
-
-  try {
-
-    console.log("Webhook Data:", req.body);
-
-    // 🔐 token generate
-    const token = uuidv4();
-
-    // ⏰ expiry
+    // ⏰ expiry 15 min
     const expiry = Date.now() + (15 * 60 * 1000);
 
     // 💾 save token
@@ -210,11 +50,172 @@ app.post("/webhook", async (req, res) => {
 
     }
 
-    // ✅ ALWAYS SUCCESS RESPONSE
+    // ✅ response
+    return res.json({
+      success: true,
+      token
+    });
+
+  } catch (err) {
+
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
+
+  }
+
+});
+
+// ===============================
+// VERIFY TOKEN
+// ===============================
+app.get("/verify-token", async (req, res) => {
+
+  try {
+
+    const token = req.query.token;
+
+    // ❌ no token
+    if (!token) {
+
+      return res.json({
+        valid: false
+      });
+
+    }
+
+    // 🔎 find token
+    const { data, error } = await supabase
+      .from("access_tokens")
+      .select("*")
+      .eq("token", token)
+      .single();
+
+    // ❌ invalid token
+    if (error || !data) {
+
+      return res.json({
+        valid: false
+      });
+
+    }
+
+    // ❌ already used
+    if (data.used) {
+
+      return res.json({
+        valid: false,
+        message: "Already Used"
+      });
+
+    }
+
+    // ❌ expired
+    if (Date.now() > data.expiry) {
+
+      return res.json({
+        valid: false,
+        message: "Expired"
+      });
+
+    }
+
+    // ✅ valid
+    return res.json({
+      valid: true
+    });
+
+  } catch (err) {
+
+    return res.status(500).json({
+      valid: false,
+      message: err.message
+    });
+
+  }
+
+});
+
+// ===============================
+// CONSUME TOKEN
+// ===============================
+app.post("/consume-token", async (req, res) => {
+
+  try {
+
+    const { token } = req.body;
+
+    // ❌ no token
+    if (!token) {
+
+      return res.json({
+        success: false
+      });
+
+    }
+
+    // 🔒 mark used
+    const { error } = await supabase
+      .from("access_tokens")
+      .update({
+        used: true
+      })
+      .eq("token", token);
+
+    // ❌ db error
+    if (error) {
+
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+
+    }
+
+    // ✅ success
+    return res.json({
+      success: true
+    });
+
+  } catch (err) {
+
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
+
+  }
+
+});
+
+// ===============================
+// WEBHOOK TEST ROUTE
+// ===============================
+app.get("/webhook", (req, res) => {
+
+  res.send("Webhook Working ✅");
+
+});
+
+// ===============================
+// CASHFREE WEBHOOK
+// ===============================
+app.post("/webhook", async (req, res) => {
+
+  try {
+
+    console.log(
+      "Cashfree Webhook:",
+      JSON.stringify(req.body, null, 2)
+    );
+
+    // ✅ ALWAYS RETURN SUCCESS
+    // taaki Cashfree test fail na kare
+
     return res.status(200).json({
       success: true,
-      message: "Webhook Received",
-      token
+      message: "Webhook Received Successfully"
     });
 
   } catch (err) {
@@ -229,6 +230,7 @@ app.post("/webhook", async (req, res) => {
   }
 
 });
+
 // ===============================
 // ROOT CHECK
 // ===============================
