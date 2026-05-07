@@ -170,6 +170,13 @@ app.post("/consume-token", async (req, res) => {
 // PAYMENT WEBHOOK
 // ===============================
 
+// GET TEST
+app.get("/webhook",(req,res)=>{
+
+  res.send("Webhook Working ✅");
+
+});
+// REAL WEBHOOK
 app.post("/webhook", async (req, res) => {
 
   try {
