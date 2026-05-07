@@ -260,6 +260,74 @@ app.post("/webhook", async (req, res) => {
 
 });
 // ===============================
+// VERIFY PAYMENT
+// ===============================
+app.get("/verify-payment", async (req, res) => {
+
+  try {
+
+    const orderId = req.query.order_id;
+
+    // ❌ no order id
+    if (!orderId) {
+
+      return res.json({
+        success: false
+      });
+
+    }
+
+    // 🔎 check payment
+    const { data, error } = await supabase
+      .from("payments")
+      .select("*")
+      .eq("order_id", orderId)
+      .eq("paid", true)
+      .single();
+
+    // ❌ not verified
+    if (error || !data) {
+
+      return res.json({
+        success: false
+      });
+
+    }
+
+    // 🔐 generate token
+    const token = uuidv4();
+
+    // ⏰ expiry
+    const expiry = Date.now() + (15 * 60 * 1000);
+
+    // 💾 save token
+    await supabase
+      .from("access_tokens")
+      .insert([
+        {
+          token,
+          used: false,
+          expiry
+        }
+      ]);
+
+    // ✅ send token
+    return res.json({
+      success: true,
+      token
+    });
+
+  } catch (err) {
+
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
+
+  }
+
+});
+// ===============================
 // ROOT CHECK
 // ===============================
 app.get("/", (req, res) => {
