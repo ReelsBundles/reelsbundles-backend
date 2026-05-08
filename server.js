@@ -338,45 +338,6 @@ app.get("/latest-payment", async (req, res) => {
 
 });
 // ===============================
-// TEST DATABASE
-// ===============================
-app.get("/test-db", async (req, res) => {
-
-  try {
-
-    const { error } = await supabase
-      .from("payments")
-      .insert([
-        {
-          order_id: "TEST123",
-          paid: true
-        }
-      ]);
-
-    if(error){
-
-      return res.json({
-        success:false,
-        error:error.message
-      });
-
-    }
-
-    return res.json({
-      success:true
-    });
-
-  } catch(err){
-
-    return res.json({
-      success:false,
-      error:err.message
-    });
-
-  }
-
-});
-// ===============================
 // ROOT CHECK
 // ===============================
 app.get("/", (req, res) => {
