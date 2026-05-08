@@ -264,36 +264,28 @@ app.post("/webhook", async (req, res) => {
 
 });
 // ===============================
-// VERIFY PAYMENT
+// VERIFY LATEST PAYMENT
 // ===============================
-app.get("/verify-payment", async (req, res) => {
+app.get("/latest-payment", async (req, res) => {
 
   try {
 
-    const orderId = req.query.order_id;
-
-    // ❌ no order id
-    if (!orderId) {
-
-      return res.json({
-        success: false
-      });
-
-    }
-
-    // 🔎 check payment
+    // 🔎 latest paid order
     const { data, error } = await supabase
       .from("payments")
       .select("*")
-      .eq("order_id", orderId)
       .eq("paid", true)
+      .order("created_at", {
+        ascending:false
+      })
+      .limit(1)
       .single();
 
-    // ❌ not verified
-    if (error || !data) {
+    // ❌ no payment
+    if(error || !data){
 
       return res.json({
-        success: false
+        success:false
       });
 
     }
@@ -302,7 +294,8 @@ app.get("/verify-payment", async (req, res) => {
     const token = uuidv4();
 
     // ⏰ expiry
-    const expiry = Date.now() + (15 * 60 * 1000);
+    const expiry =
+    Date.now() + (15 * 60 * 1000);
 
     // 💾 save token
     await supabase
@@ -310,22 +303,22 @@ app.get("/verify-payment", async (req, res) => {
       .insert([
         {
           token,
-          used: false,
+          used:false,
           expiry
         }
       ]);
 
     // ✅ send token
     return res.json({
-      success: true,
+      success:true,
       token
     });
 
-  } catch (err) {
+  } catch(err){
 
     return res.status(500).json({
-      success: false,
-      message: err.message
+      success:false,
+      message:err.message
     });
 
   }
