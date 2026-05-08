@@ -229,11 +229,8 @@ app.post("/webhook", async (req, res) => {
 
     }
 
-    // ✅ SUCCESS PAYMENT
-     if(paymentStatus === "PAID"){
-
-      // 💾 SAVE VERIFIED PAYMENT
-   if(paymentStatus === "PAID"){
+  // ✅ SUCCESS PAYMENT
+if(paymentStatus === "PAID"){
 
   console.log("PAYMENT VERIFIED ✅");
 
@@ -262,7 +259,6 @@ app.post("/webhook", async (req, res) => {
   }
 
 }
-
     // ✅ ALWAYS SUCCESS RESPONSE
     return res.status(200).json({
       success:true
