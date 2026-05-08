@@ -210,15 +210,19 @@ app.post("/webhook", async (req, res) => {
       body?.order_id ||
       body?.data?.order_id;
 
-    // 🔥 PAYMENT STATUS
-    const paymentStatus =
-     body?.data?.order?.order_status ||
-     body?.order_status ||
-     body?.data?.order_status;
+  // 🔥 EVENT TYPE
+const eventType = body?.type;
 
-    console.log("ORDER ID:", orderId);
-    console.log("PAYMENT STATUS:", paymentStatus);
+// 🔥 PAYMENT STATUS
+const paymentStatus =
+ body?.data?.payment?.payment_status ||
+ body?.data?.payment_status ||
+ body?.payment_status;
 
+console.log("ORDER ID:", orderId);
+console.log("PAYMENT STATUS:", paymentStatus);
+console.log("EVENT TYPE:", eventType);
+    
     // ❌ no order id
     if(!orderId){
 
@@ -230,7 +234,10 @@ app.post("/webhook", async (req, res) => {
     }
 
   // ✅ SUCCESS PAYMENT
-if(paymentStatus === "PAID"){
+if(
+  eventType === "PAYMENT_SUCCESS_WEBHOOK" &&
+  paymentStatus === "SUCCESS"
+){
 
   console.log("PAYMENT VERIFIED ✅");
 
