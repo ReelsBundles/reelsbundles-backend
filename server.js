@@ -283,18 +283,22 @@ app.get("/latest-payment", async (req, res) => {
 
   try {
 
-    // 🔎 latest paid order
+    // 🔎 latest successful unused payment
     const { data, error } = await supabase
       .from("payments")
       .select("*")
       .eq("paid", true)
+      .eq("used", false)
       .order("created_at", {
         ascending:false
       })
       .limit(1)
       .single();
 
-    // ❌ no payment
+    console.log("PAYMENT DATA:", data);
+    console.log("PAYMENT ERROR:", error);
+
+    // ❌ NO PAYMENT FOUND
     if(error || !data){
 
       return res.json({
@@ -303,10 +307,18 @@ app.get("/latest-payment", async (req, res) => {
 
     }
 
+    // 🔒 mark payment used
+    await supabase
+      .from("payments")
+      .update({
+        used:true
+      })
+      .eq("id", data.id);
+
     // 🔐 generate token
     const token = uuidv4();
 
-    // ⏰ expiry
+    // ⏰ token expiry
     const expiry =
     Date.now() + (15 * 60 * 1000);
 
@@ -321,13 +333,15 @@ app.get("/latest-payment", async (req, res) => {
         }
       ]);
 
-    // ✅ send token
+    // ✅ success
     return res.json({
       success:true,
       token
     });
 
   } catch(err){
+
+    console.log(err);
 
     return res.status(500).json({
       success:false,
