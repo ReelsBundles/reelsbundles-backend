@@ -233,14 +233,29 @@ app.post("/webhook", async (req, res) => {
      if(paymentStatus === "PAID"){
 
       // 💾 SAVE VERIFIED PAYMENT
-      await supabase
-      .from("payments")
-      .upsert([
-        {
-          order_id: orderId,
-          paid: true
-        }
-      ]);
+    const { error } = await supabase
+.from("payments")
+.upsert([
+  {
+    order_id: orderId,
+    paid: true
+  }
+]);
+
+if(error){
+
+  console.log(
+    "PAYMENT SAVE ERROR:",
+    error
+  );
+
+}else{
+
+  console.log(
+    "PAYMENT SAVED SUCCESSFULLY"
+  );
+
+}
 
       console.log("PAYMENT VERIFIED ✅");
 
