@@ -267,12 +267,15 @@ export async function createCashfreeOrder(
             );
 
 
-            const message =
+            let message =
                 data?.message ||
                 data?.error_description ||
                 data?.error ||
                 `Cashfree API error (${response.status})`;
 
+            if (String(message).toLowerCase().includes("authentication failed") || response.status === 401) {
+                message = "Payment Gateway Credentials Error: Invalid CASHFREE_CLIENT_ID or CASHFREE_CLIENT_SECRET in backend environment settings.";
+            }
 
             throw new Error(
                 message
