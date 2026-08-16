@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Secrets & Local Environment
+.env
+.env.*
+!.env.example
+firebase-admin.json
+service-account.json
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
