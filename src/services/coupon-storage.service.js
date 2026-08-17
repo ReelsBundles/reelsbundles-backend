@@ -12,21 +12,7 @@ function ensureFile() {
         fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     if (!fs.existsSync(FILE_PATH)) {
-        fs.writeFileSync(FILE_PATH, JSON.stringify([
-            {
-                id: "cpn_welcome10",
-                code: "WELCOME10",
-                discountType: "percentage",
-                discountValue: 10,
-                minOrderAmount: 0,
-                maxDiscount: 50,
-                usageCount: 0,
-                maxUses: 500,
-                expiryDate: null,
-                active: true,
-                createdAt: new Date().toISOString()
-            }
-        ], null, 2), 'utf8');
+        fs.writeFileSync(FILE_PATH, JSON.stringify([], null, 2), 'utf8');
     }
 }
 

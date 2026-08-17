@@ -12,17 +12,7 @@ function ensureFile() {
         fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     if (!fs.existsSync(FILE_PATH)) {
-        fs.writeFileSync(FILE_PATH, JSON.stringify([
-            {
-                id: "vid_demo_1",
-                title: "Instagram Viral Reels Bundle Preview",
-                youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                videoId: "dQw4w9WgXcQ",
-                category: "General",
-                active: true,
-                createdAt: new Date().toISOString()
-            }
-        ], null, 2), 'utf8');
+        fs.writeFileSync(FILE_PATH, JSON.stringify([], null, 2), 'utf8');
     }
 }
 
