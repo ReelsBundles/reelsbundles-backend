@@ -152,9 +152,6 @@ function safeBundle(bundle, isUnlocked = false) {
         bundle?.premium?.thumbnail ||
         null;
 
-    const driveLink = isUnlocked ? (planData.folderLink || (planData.folderId ? `https://drive.google.com/drive/folders/${planData.folderId}` : null)) : null;
-    const megaLink = isUnlocked ? (planData.megaLink || bundle.megaLink || null) : null;
-
     return {
         id: bundle.id,
         name: bundle.name || "Reels Bundle",
@@ -173,8 +170,7 @@ function safeBundle(bundle, isUnlocked = false) {
         active,
         locked: !active,
         status: active ? "ACTIVE" : "LOCKED",
-        driveLink,
-        megaLink
+        unlocked: isUnlocked
     };
 }
 
