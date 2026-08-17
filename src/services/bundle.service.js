@@ -175,16 +175,16 @@ function normalizeBundle(data) {
             title: plan === "basic" ? basicTitle : "",
             fileId: null,
             folderId: plan === "basic" && basicFolderId ? encrypt(basicFolderId) : null,
-            folderLink: plan === "basic" ? basicFolderLink : "",
-            megaLink: plan === "basic" ? basicMegaLink : ""
+            folderLink: plan === "basic" && basicFolderLink ? encrypt(basicFolderLink) : "",
+            megaLink: plan === "basic" && basicMegaLink ? encrypt(basicMegaLink) : ""
         },
 
         premium: {
             title: plan === "premium" ? premiumTitle : "",
             fileId: null,
             folderId: plan === "premium" && premiumFolderId ? encrypt(premiumFolderId) : null,
-            folderLink: plan === "premium" ? premiumFolderLink : "",
-            megaLink: plan === "premium" ? premiumMegaLink : ""
+            folderLink: plan === "premium" && premiumFolderLink ? encrypt(premiumFolderLink) : "",
+            megaLink: plan === "premium" && premiumMegaLink ? encrypt(premiumMegaLink) : ""
         },
 
         active: Boolean(data.active),
@@ -199,75 +199,30 @@ function normalizeBundle(data) {
 ========================================================== */
 
 function mapBundle(doc) {
-
-    const data =
-        doc.data() || {};
-
-
-    const basic =
-        data.basic || {};
-
-
-    const premium =
-        data.premium || {};
-
+    const data = doc.data() || {};
+    const basic = data.basic || {};
+    const premium = data.premium || {};
 
     return {
-
-        id:
-            doc.id,
-
-
+        id: doc.id,
         ...data,
 
-
         basic: {
-
             ...basic,
-
-
-            fileId:
-                basic.fileId
-                    ? decrypt(
-                        basic.fileId
-                    )
-                    : null,
-
-
-            folderId:
-                basic.folderId
-                    ? decrypt(
-                        basic.folderId
-                    )
-                    : null
-
+            fileId: basic.fileId ? decrypt(basic.fileId) : null,
+            folderId: basic.folderId ? decrypt(basic.folderId) : null,
+            folderLink: basic.folderLink ? decrypt(basic.folderLink) : "",
+            megaLink: basic.megaLink ? decrypt(basic.megaLink) : ""
         },
 
-
         premium: {
-
             ...premium,
-
-
-            fileId:
-                premium.fileId
-                    ? decrypt(
-                        premium.fileId
-                    )
-                    : null,
-
-
-            folderId:
-                premium.folderId
-                    ? decrypt(
-                        premium.folderId
-                    )
-                    : null
-
+            fileId: premium.fileId ? decrypt(premium.fileId) : null,
+            folderId: premium.folderId ? decrypt(premium.folderId) : null,
+            folderLink: premium.folderLink ? decrypt(premium.folderLink) : "",
+            megaLink: premium.megaLink ? decrypt(premium.megaLink) : ""
         }
-
     };
-
 }
 /* ==========================================================
    GET ALL BUNDLES
