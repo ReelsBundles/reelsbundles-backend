@@ -36,12 +36,21 @@ export function handleSyncUser(req, res) {
 
 export function handleGetUserStatus(req, res) {
     try {
-        const identifier = req.query.uid || req.query.email || req.query.id || req.user?.uid || req.user?.email;
-        const result = getUserStatus(identifier);
+        const uid = req.query.uid || req.user?.uid;
+        const email = req.query.email || req.user?.email;
+        const result = getUserStatus(uid, email);
+        if (result.disabled) {
+            return res.status(403).json({
+                success: false,
+                disabled: true,
+                status: "disabled",
+                message: "Your account has been disabled by the admin. Please contact support."
+            });
+        }
         return res.status(200).json({
             success: true,
-            status: result.status,
-            disabled: result.disabled
+            status: result.status || "active",
+            disabled: false
         });
     } catch (err) {
         return res.status(500).json({

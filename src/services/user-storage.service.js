@@ -31,11 +31,19 @@ export function saveUsers(users) {
     fs.writeFileSync(FILE_PATH, JSON.stringify(users, null, 2), 'utf8');
 }
 
-export function getUserStatus(identifier) {
-    if (!identifier) return { status: "active", disabled: false };
+export function getUserStatus(uid, email) {
     const users = getAllUsers();
-    const cleanId = String(identifier).trim().toLowerCase();
-    const user = users.find(u => (u.uid && u.uid.toLowerCase() === cleanId) || (u.id && u.id.toLowerCase() === cleanId) || (u.email && u.email.toLowerCase() === cleanId));
+    const cleanUid = String(uid || "").trim().toLowerCase();
+    const cleanEmail = String(email || "").trim().toLowerCase();
+
+    if (!cleanUid && !cleanEmail) return { status: "active", disabled: false };
+
+    const user = users.find(u =>
+        (cleanUid && u.uid && u.uid.toLowerCase() === cleanUid) ||
+        (cleanUid && u.id && u.id.toLowerCase() === cleanUid) ||
+        (cleanEmail && u.email && u.email.toLowerCase() === cleanEmail)
+    );
+
     if (!user) return { status: "active", disabled: false };
     return {
         status: user.status || "active",
