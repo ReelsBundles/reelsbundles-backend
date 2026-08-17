@@ -1179,14 +1179,15 @@ export async function createBulkBundles(items) {
     for (let i = 0; i < items.length; i++) {
         const item = items[i];
         try {
-            if (!item || !item.name || (!item.driveLink && !item.basic?.folderLink && !item.premium?.folderLink)) {
-                skippedCount++;
-                errors.push({ row: i + 1, name: item?.name || `Row ${i + 1}`, error: "Name and Drive Link are required." });
-                continue;
-            }
-
             const plan = String(item.plan || "basic").trim().toLowerCase() === "premium" ? "premium" : "basic";
             const driveLink = item.driveLink || item.link || (plan === "premium" ? item.premium?.folderLink : item.basic?.folderLink) || "";
+            const megaLink = item.megaLink || item.megaUrl || (plan === "premium" ? item.premium?.megaLink : item.basic?.megaLink) || "";
+
+            if (!item || !item.name || (!driveLink && !megaLink)) {
+                skippedCount++;
+                errors.push({ row: i + 1, name: item?.name || `Row ${i + 1}`, error: "Name and at least one storage link (Google Drive or MEGA.nz) are required." });
+                continue;
+            }
 
             const bundlePayload = {
                 name: String(item.name).trim(),
@@ -1196,11 +1197,13 @@ export async function createBulkBundles(items) {
                 active: item.active !== false,
                 basic: {
                     title: plan === "basic" ? String(item.name).trim() : "",
-                    folderLink: plan === "basic" ? driveLink : ""
+                    folderLink: plan === "basic" ? driveLink : "",
+                    megaLink: plan === "basic" ? megaLink : ""
                 },
                 premium: {
                     title: plan === "premium" ? String(item.name).trim() : "",
-                    folderLink: plan === "premium" ? driveLink : ""
+                    folderLink: plan === "premium" ? driveLink : "",
+                    megaLink: plan === "premium" ? megaLink : ""
                 }
             };
 

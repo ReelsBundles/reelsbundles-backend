@@ -40,7 +40,17 @@ export function validateBundle(data) {
             ""
         ).trim();
 
-        if (!isDriveLink(folderLink)) {
+        const megaLink = String(
+            data.basic?.megaLink ||
+            data.basic?.megaUrl ||
+            data.megaLink ||
+            ""
+        ).trim();
+
+        if (!folderLink && !megaLink) {
+            errors.push("At least one storage link (Google Drive or MEGA.nz) is required for Basic plan.");
+        }
+        if (folderLink && !isDriveLink(folderLink)) {
             errors.push("Invalid Basic Google Drive Folder Link.");
         }
     }
@@ -56,7 +66,17 @@ export function validateBundle(data) {
             ""
         ).trim();
 
-        if (!isDriveLink(folderLink)) {
+        const megaLink = String(
+            data.premium?.megaLink ||
+            data.premium?.megaUrl ||
+            data.megaLink ||
+            ""
+        ).trim();
+
+        if (!folderLink && !megaLink) {
+            errors.push("At least one storage link (Google Drive or MEGA.nz) is required for Premium plan.");
+        }
+        if (folderLink && !isDriveLink(folderLink)) {
             errors.push("Invalid Premium Google Drive Folder Link.");
         }
     }
