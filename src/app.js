@@ -491,6 +491,11 @@ app.use(
 );
 
 app.use(
+    "/api",
+    protectionRoutes
+);
+
+app.use(
     "/api/protection",
     protectionRoutes
 );
