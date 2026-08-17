@@ -31,6 +31,19 @@ export function saveUsers(users) {
     fs.writeFileSync(FILE_PATH, JSON.stringify(users, null, 2), 'utf8');
 }
 
+export function getUserStatus(identifier) {
+    if (!identifier) return { status: "active", disabled: false };
+    const users = getAllUsers();
+    const cleanId = String(identifier).trim().toLowerCase();
+    const user = users.find(u => (u.uid && u.uid.toLowerCase() === cleanId) || (u.id && u.id.toLowerCase() === cleanId) || (u.email && u.email.toLowerCase() === cleanId));
+    if (!user) return { status: "active", disabled: false };
+    return {
+        status: user.status || "active",
+        disabled: user.status === "disabled",
+        user
+    };
+}
+
 export function syncUser(userData) {
     if (!userData || (!userData.uid && !userData.email)) {
         throw new Error("Invalid user data for sync");

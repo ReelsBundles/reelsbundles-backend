@@ -2,15 +2,27 @@ import {
     getAllUsers,
     syncUser,
     deleteUser,
-    toggleUserStatus
+    toggleUserStatus,
+    getUserStatus
 } from "../services/user-storage.service.js";
 
 export function handleSyncUser(req, res) {
     try {
         const userData = req.body || {};
         const synced = syncUser(userData);
+
+        if (synced && synced.status === "disabled") {
+            return res.status(403).json({
+                success: false,
+                disabled: true,
+                status: "disabled",
+                message: "Your account has been disabled by the admin. Please contact support."
+            });
+        }
+
         return res.status(200).json({
             success: true,
+            status: synced?.status || "active",
             message: "User profile synced successfully",
             user: synced
         });
@@ -18,6 +30,24 @@ export function handleSyncUser(req, res) {
         return res.status(400).json({
             success: false,
             message: err.message || "Failed to sync user profile"
+        });
+    }
+}
+
+export function handleGetUserStatus(req, res) {
+    try {
+        const identifier = req.query.uid || req.query.email || req.query.id || req.user?.uid || req.user?.email;
+        const result = getUserStatus(identifier);
+        return res.status(200).json({
+            success: true,
+            status: result.status,
+            disabled: result.disabled
+        });
+    } catch (err) {
+        return res.status(500).json({
+            success: false,
+            status: "active",
+            disabled: false
         });
     }
 }

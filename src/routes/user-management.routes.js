@@ -1,6 +1,7 @@
 import express from "express";
 import {
     handleSyncUser,
+    handleGetUserStatus,
     handleGetAdminUsers,
     handleDeleteAdminUser,
     handleToggleAdminUserStatus
@@ -8,9 +9,10 @@ import {
 
 const router = express.Router();
 
-// Public sync user endpoint called on login/signup
+// Public endpoints
 router.post("/auth/sync-user", handleSyncUser);
 router.post("/users/sync", handleSyncUser);
+router.get("/user/status", handleGetUserStatus);
 
 // Admin user management endpoints
 router.get("/admin/users", handleGetAdminUsers);
