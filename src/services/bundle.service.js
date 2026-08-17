@@ -281,37 +281,27 @@ function mapBundle(doc) {
 ========================================================== */
 
 export async function getBundles() {
-
-    const snapshot =
-        await collection
-            .orderBy("name")
-            .get();
-
+    let snapshot;
+    try {
+        snapshot = await collection.orderBy("name").get();
+    } catch (e) {
+        console.warn("[getBundles] orderBy('name') failed, falling back to simple get():", e.message);
+        snapshot = await collection.get();
+    }
 
     const bundles = [];
 
-
-    snapshot.forEach(
-        (doc) => {
-
-            const data =
-                doc.data() || {};
-
-
-            const mapped =
-                mapBundle(doc);
-
-
-            bundles.push(
-                mapped
-            );
-
+    snapshot.forEach((doc) => {
+        try {
+            const mapped = mapBundle(doc);
+            bundles.push(mapped);
+        } catch (err) {
+            console.warn(`[getBundles] Error mapping bundle doc ${doc.id}:`, err.message);
+            bundles.push({ id: doc.id, ...doc.data() });
         }
-    );
-
+    });
 
     return bundles;
-
 }
 /* ==========================================================
    GET SINGLE BUNDLE

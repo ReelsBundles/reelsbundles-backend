@@ -17,6 +17,7 @@ const key = crypto
 const ivLength = 16;
 
 export function encrypt(text) {
+  if (!text || typeof text !== "string") return text;
   const iv = crypto.randomBytes(ivLength);
 
   const cipher = crypto.createCipheriv(
@@ -37,25 +38,32 @@ export function encrypt(text) {
 }
 
 export function decrypt(hash) {
-  const parts = hash.split(":");
+  if (!hash || typeof hash !== "string" || !hash.includes(":")) {
+    return hash || null;
+  }
+  try {
+    const parts = hash.split(":");
+    const ivHex = parts.shift();
+    const iv = Buffer.from(ivHex, "hex");
+    if (iv.length !== ivLength) return hash;
 
-  const iv = Buffer.from(parts.shift(), "hex");
+    const encrypted = parts.join(":");
+    const decipher = crypto.createDecipheriv(
+      algorithm,
+      key,
+      iv
+    );
 
-  const encrypted = parts.join(":");
+    let decrypted = decipher.update(
+      encrypted,
+      "hex",
+      "utf8"
+    );
 
-  const decipher = crypto.createDecipheriv(
-    algorithm,
-    key,
-    iv
-  );
-
-  let decrypted = decipher.update(
-    encrypted,
-    "hex",
-    "utf8"
-  );
-
-  decrypted += decipher.final("utf8");
-
-  return decrypted;
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  } catch (err) {
+    console.warn("[Encryption] Decrypt failed, returning raw string:", err.message);
+    return hash;
+  }
 }
