@@ -16,6 +16,8 @@ import adminDownloadRoutes from "./routes/admin-download.routes.js";
 import userBundleRoutes from "./routes/user-bundle.routes.js";
 import secureDownloadRoutes
     from "./routes/secure-download.routes.js";
+import couponRoutes from "./routes/coupon.routes.js";
+import demoVideoRoutes from "./routes/demo-video.routes.js";
 
 import "./config/env.js";
 
@@ -437,6 +439,20 @@ app.use(
 app.use(
     "/api/admin/downloads",
     adminDownloadRoutes
+);
+
+/* ----------------------------------------------------------
+   COUPONS & DEMO VIDEOS
+---------------------------------------------------------- */
+
+app.use(
+    "/api",
+    couponRoutes
+);
+
+app.use(
+    "/api",
+    demoVideoRoutes
 );
 
 

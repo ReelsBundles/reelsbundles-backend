@@ -21,6 +21,12 @@ import {
 } from "../utils/token.js";
 
 
+import {
+    getCouponByCode,
+    incrementCouponUsage
+} from "../services/coupon-storage.service.js";
+
+
 /* ==========================================================
    CREATE PAYMENT ORDER
 ========================================================== */
@@ -35,7 +41,8 @@ export const createOrder = async (
         const {
             plan,
             fullName,
-            phone
+            phone,
+            couponCode
         } = req.body;
 
 
@@ -80,13 +87,28 @@ export const createOrder = async (
 
 
         /* --------------------------------------------------
-           GENERATE INTERNAL ORDER
+           GENERATE INTERNAL ORDER & APPLY COUPON
         -------------------------------------------------- */
 
         const order =
             generateOrder(
                 selectedPlan
             );
+
+        if (couponCode) {
+            const coupon = getCouponByCode(couponCode);
+            if (coupon && coupon.active && (!coupon.expiryDate || new Date(coupon.expiryDate) >= new Date())) {
+                let discount = 0;
+                if (coupon.discountType === 'percentage') {
+                    discount = Math.round((selectedPlan.amount * coupon.discountValue) / 100);
+                    if (coupon.maxDiscount && discount > coupon.maxDiscount) discount = coupon.maxDiscount;
+                } else if (coupon.discountType === 'flat') {
+                    discount = coupon.discountValue;
+                }
+                order.order_amount = Math.max(1, selectedPlan.amount - discount);
+                incrementCouponUsage(coupon.code);
+            }
+        }
 
 
         /*
