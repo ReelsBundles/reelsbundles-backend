@@ -1,5 +1,6 @@
 import {
     getAllCoupons,
+    fetchCouponsAsync,
     getCouponByCode,
     createCoupon as createCouponService,
     toggleCoupon as toggleCouponService,
@@ -89,7 +90,7 @@ export const applyCoupon = async (req, res) => {
 
 export const listCoupons = async (req, res) => {
     try {
-        const coupons = getAllCoupons();
+        const coupons = await fetchCouponsAsync();
         return res.json({
             success: true,
             coupons

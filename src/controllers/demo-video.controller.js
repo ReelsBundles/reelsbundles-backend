@@ -1,6 +1,6 @@
 import {
-    getAllVideos,
-    getActiveVideos,
+    fetchVideosAsync,
+    getActiveVideosAsync,
     addVideo as addVideoService,
     toggleVideo as toggleVideoService,
     deleteVideo as deleteVideoService
@@ -8,7 +8,7 @@ import {
 
 export const getPublicDemoVideos = async (req, res) => {
     try {
-        const videos = getActiveVideos();
+        const videos = await getActiveVideosAsync();
         return res.json({
             success: true,
             videos
@@ -23,7 +23,7 @@ export const getPublicDemoVideos = async (req, res) => {
 
 export const listAdminVideos = async (req, res) => {
     try {
-        const videos = getAllVideos();
+        const videos = await fetchVideosAsync();
         return res.json({
             success: true,
             videos
@@ -38,7 +38,7 @@ export const listAdminVideos = async (req, res) => {
 
 export const addVideo = async (req, res) => {
     try {
-        const newVideo = addVideoService(req.body);
+        const newVideo = await addVideoService(req.body);
         return res.json({
             success: true,
             message: "Demo video added successfully!",
@@ -54,7 +54,7 @@ export const addVideo = async (req, res) => {
 
 export const toggleVideo = async (req, res) => {
     try {
-        const updated = toggleVideoService(req.params.id);
+        const updated = await toggleVideoService(req.params.id);
         return res.json({
             success: true,
             message: `Video is now ${updated.active ? 'Active' : 'Inactive'}`,
@@ -70,10 +70,10 @@ export const toggleVideo = async (req, res) => {
 
 export const deleteVideo = async (req, res) => {
     try {
-        deleteVideoService(req.params.id);
+        await deleteVideoService(req.params.id);
         return res.json({
             success: true,
-            message: "Demo video removed."
+            message: "Demo video deleted successfully."
         });
     } catch (error) {
         return res.status(400).json({

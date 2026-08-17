@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { db } from '../config/firebase.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,6 +27,32 @@ export function getAllCoupons() {
     }
 }
 
+export async function fetchCouponsAsync() {
+    ensureFile();
+    let items = getAllCoupons();
+
+    try {
+        if (db) {
+            const snapshot = await db.collection("coupons").get();
+            if (!snapshot.empty) {
+                const remote = [];
+                snapshot.forEach(doc => remote.push({ id: doc.id, ...doc.data() }));
+                
+                remote.forEach(rItem => {
+                    if (!items.some(lItem => lItem.id === rItem.id || (lItem.code && lItem.code.toUpperCase() === rItem.code.toUpperCase()))) {
+                        items.push(rItem);
+                    }
+                });
+                saveCoupons(items);
+            }
+        }
+    } catch (e) {
+        console.warn("[COUPONS] Firestore sync warning:", e?.message);
+    }
+
+    return items;
+}
+
 export function saveCoupons(coupons) {
     ensureFile();
     fs.writeFileSync(FILE_PATH, JSON.stringify(coupons, null, 2), 'utf8');
@@ -38,7 +65,7 @@ export function getCouponByCode(code) {
     return coupons.find(c => c.code.toUpperCase() === cleanCode) || null;
 }
 
-export function createCoupon(data) {
+export async function createCoupon(data) {
     const coupons = getAllCoupons();
     const cleanCode = String(data.code || '').trim().toUpperCase();
     if (!cleanCode) throw new Error("Coupon code is required");
@@ -62,33 +89,62 @@ export function createCoupon(data) {
 
     coupons.push(newCoupon);
     saveCoupons(coupons);
+
+    try {
+        if (db) {
+            await db.collection("coupons").doc(newCoupon.id).set(newCoupon);
+        }
+    } catch (e) {
+        console.warn("[COUPON] Firestore write warning:", e?.message);
+    }
+
     return newCoupon;
 }
 
-export function toggleCoupon(id) {
+export async function toggleCoupon(id) {
     const coupons = getAllCoupons();
     const coupon = coupons.find(c => c.id === id);
     if (!coupon) throw new Error("Coupon not found");
     coupon.active = !coupon.active;
     saveCoupons(coupons);
+
+    try {
+        if (db) {
+            await db.collection("coupons").doc(id).update({ active: coupon.active });
+        }
+    } catch (e) {}
+
     return coupon;
 }
 
-export function deleteCoupon(id) {
+export async function deleteCoupon(id) {
     let coupons = getAllCoupons();
     const initialLen = coupons.length;
     coupons = coupons.filter(c => c.id !== id);
     if (coupons.length === initialLen) throw new Error("Coupon not found");
     saveCoupons(coupons);
+
+    try {
+        if (db) {
+            await db.collection("coupons").doc(id).delete();
+        }
+    } catch (e) {}
+
     return true;
 }
 
-export function incrementCouponUsage(code) {
+export async function incrementCouponUsage(code) {
     const cleanCode = String(code).trim().toUpperCase();
     const coupons = getAllCoupons();
     const coupon = coupons.find(c => c.code.toUpperCase() === cleanCode);
     if (coupon) {
         coupon.usageCount = (coupon.usageCount || 0) + 1;
         saveCoupons(coupons);
+
+        try {
+            if (db) {
+                await db.collection("coupons").doc(coupon.id).update({ usageCount: coupon.usageCount });
+            }
+        } catch (e) {}
     }
 }

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { db } from '../config/firebase.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,8 +42,39 @@ export function getAllVideos() {
     }
 }
 
+export async function fetchVideosAsync() {
+    ensureFile();
+    let items = getAllVideos();
+
+    try {
+        if (db) {
+            const snapshot = await db.collection("demo_videos").get();
+            if (!snapshot.empty) {
+                const remote = [];
+                snapshot.forEach(doc => remote.push({ id: doc.id, ...doc.data() }));
+
+                remote.forEach(rItem => {
+                    if (!items.some(lItem => lItem.id === rItem.id || (lItem.videoId && lItem.videoId === rItem.videoId))) {
+                        items.push(rItem);
+                    }
+                });
+                saveVideos(items);
+            }
+        }
+    } catch (e) {
+        console.warn("[DEMO VIDEOS] Firestore sync warning:", e?.message);
+    }
+
+    return items;
+}
+
 export function getActiveVideos() {
     return getAllVideos().filter(v => v.active !== false);
+}
+
+export async function getActiveVideosAsync() {
+    const all = await fetchVideosAsync();
+    return all.filter(v => v.active !== false);
 }
 
 export function saveVideos(videos) {
@@ -50,7 +82,7 @@ export function saveVideos(videos) {
     fs.writeFileSync(FILE_PATH, JSON.stringify(videos, null, 2), 'utf8');
 }
 
-export function addVideo(data) {
+export async function addVideo(data) {
     const videos = getAllVideos();
     const videoId = extractYouTubeId(data.youtubeUrl || data.videoId);
     if (!videoId) throw new Error("Valid YouTube URL or Video ID is required");
@@ -69,23 +101,46 @@ export function addVideo(data) {
 
     videos.push(newVideo);
     saveVideos(videos);
+
+    try {
+        if (db) {
+            await db.collection("demo_videos").doc(newVideo.id).set(newVideo);
+        }
+    } catch (e) {
+        console.warn("[DEMO VIDEO] Firestore write warning:", e?.message);
+    }
+
     return newVideo;
 }
 
-export function toggleVideo(id) {
+export async function toggleVideo(id) {
     const videos = getAllVideos();
     const video = videos.find(v => v.id === id);
     if (!video) throw new Error("Video not found");
     video.active = !video.active;
     saveVideos(videos);
+
+    try {
+        if (db) {
+            await db.collection("demo_videos").doc(id).update({ active: video.active });
+        }
+    } catch (e) {}
+
     return video;
 }
 
-export function deleteVideo(id) {
+export async function deleteVideo(id) {
     let videos = getAllVideos();
     const initialLen = videos.length;
     videos = videos.filter(v => v.id !== id);
     if (videos.length === initialLen) throw new Error("Video not found");
     saveVideos(videos);
+
+    try {
+        if (db) {
+            await db.collection("demo_videos").doc(id).delete();
+        }
+    } catch (e) {}
+
     return true;
 }
