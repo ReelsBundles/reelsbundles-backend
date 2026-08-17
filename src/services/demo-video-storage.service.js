@@ -19,11 +19,13 @@ function ensureFile() {
 export function extractYouTubeId(url) {
     if (!url) return '';
     const cleanUrl = String(url).trim();
-    const matchV = cleanUrl.match(/[?&]v=([^&]+)/);
+    const matchShorts = cleanUrl.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/);
+    if (matchShorts) return matchShorts[1];
+    const matchV = cleanUrl.match(/[?&]v=([a-zA-Z0-9_-]+)/);
     if (matchV) return matchV[1];
-    const matchBe = cleanUrl.match(/youtu\.be\/([^?&]+)/);
+    const matchBe = cleanUrl.match(/youtu\.be\/([a-zA-Z0-9_-]+)/);
     if (matchBe) return matchBe[1];
-    const matchEmbed = cleanUrl.match(/youtube\.com\/embed\/([^?&]+)/);
+    const matchEmbed = cleanUrl.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]+)/);
     if (matchEmbed) return matchEmbed[1];
     if (/^[a-zA-Z0-9_-]{11}$/.test(cleanUrl)) return cleanUrl;
     return cleanUrl;
@@ -53,11 +55,13 @@ export function addVideo(data) {
     const videoId = extractYouTubeId(data.youtubeUrl || data.videoId);
     if (!videoId) throw new Error("Valid YouTube URL or Video ID is required");
 
+    const isShort = String(data.videoType || "").toLowerCase() === "short" || String(data.youtubeUrl || "").includes("/shorts/");
     const newVideo = {
         id: "vid_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
         title: String(data.title || "Reels Bundle Demo").trim(),
-        youtubeUrl: data.youtubeUrl || `https://www.youtube.com/watch?v=${videoId}`,
+        youtubeUrl: data.youtubeUrl || (isShort ? `https://www.youtube.com/shorts/${videoId}` : `https://www.youtube.com/watch?v=${videoId}`),
         videoId: videoId,
+        videoType: isShort ? "short" : "video",
         category: String(data.category || "General").trim(),
         active: data.active !== false,
         createdAt: new Date().toISOString()
