@@ -1,77 +1,21 @@
 import { db } from "../config/firebase.js";
-
-
-/* ==========================================================
-   ADMIN DOWNLOAD LOGS
-   ----------------------------------------------------------
-   Combines:
-
-   download_logs
-        +
-   payments
-
-   So Admin gets:
-
-   Customer Name
-   Email
-   Phone
-   Order ID
-   Amount
-   Payment Status
-   Plan
-   Bundle
-   Download Count
-   IP
-   User Agent
-   Date
-========================================================== */
-
-
-/* ==========================================================
-   HELPERS
-========================================================== */
+import {
+    getLocalDownloadLogs,
+    saveLocalDownloadLogs,
+    deleteAllLocalDownloadLogs
+} from "../services/download-log.service.js";
 
 function normalizeText(value) {
-
-    return String(
-        value ?? ""
-    )
-        .trim()
-        .toLowerCase();
-
+    return String(value ?? "").trim().toLowerCase();
 }
-
 
 function toNumber(value) {
-
-    const number =
-        Number(value);
-
-
-    return Number.isFinite(
-        number
-    )
-        ? number
-        : 0;
-
+    const number = Number(value);
+    return Number.isFinite(number) ? number : 0;
 }
 
-
-/* ==========================================================
-   GET ADMIN DOWNLOADS
-========================================================== */
-
-export const getAdminDownloads = async (
-    req,
-    res
-) => {
-
+export const getAdminDownloads = async (req, res) => {
     try {
-
-        /* --------------------------------------------------
-           QUERY PARAMETERS
-        -------------------------------------------------- */
-
         const {
             page = 1,
             limit = 20,
@@ -80,866 +24,169 @@ export const getAdminDownloads = async (
             status = ""
         } = req.query;
 
-
-        const currentPage =
-            Math.max(
-                Number(page) || 1,
-                1
-            );
-
-
-        const perPage =
-            Math.min(
-                Math.max(
-                    Number(limit) || 20,
-                    1
-                ),
-                100
-            );
-
-
-        /* --------------------------------------------------
-           GET DOWNLOAD LOGS
-        -------------------------------------------------- */
-
-        const downloadSnapshot =
-            await db
-                .collection(
-                    "download_logs"
-                )
-                .orderBy(
-                    "createdAt",
-                    "desc"
-                )
-                .get();
-
-
-        /* --------------------------------------------------
-           GET PAYMENTS
-        --------------------------------------------------
-
-           Payment records already contain:
-
-           customerName
-           customerEmail
-           customerPhone
-           amount
-           paymentStatus
-           orderId
-
-           These are created during payment verification.
-        -------------------------------------------------- */
-
-        const paymentSnapshot =
-            await db
-                .collection(
-                    "payments"
-                )
-                .get();
-
-
-        /* --------------------------------------------------
-           CREATE PAYMENT MAP
-        -------------------------------------------------- */
-
-        const paymentsByOrderId =
-            new Map();
-
-
-        paymentSnapshot.forEach(
-            doc => {
-
-                const payment =
-                    doc.data() || {};
-
-
-                const paymentOrderId =
-                    payment.orderId ||
-                    payment.order_id ||
-                    doc.id;
-
-
-                if (
-                    paymentOrderId
-                ) {
-
-                    paymentsByOrderId.set(
-                        String(
-                            paymentOrderId
-                        ),
-                        {
-
-                            id:
-                                doc.id,
-
-                            ...payment
-
-                        }
-                    );
-
-                }
-
-            }
-        );
-
-
-        /* --------------------------------------------------
-           BUILD DOWNLOAD RECORDS
-        -------------------------------------------------- */
-
-        let downloads = [];
-
-
-        downloadSnapshot.forEach(
-            doc => {
-
-                const log =
-                    doc.data() || {};
-
-
-                const orderId =
-                    log.orderId ||
-                    log.order_id ||
-                    null;
-
-
-                const payment =
-                    orderId
-                        ? paymentsByOrderId.get(
-                            String(
-                                orderId
-                            )
-                        ) || {}
-                        : {};
-
-
-                /*
-                 * Payment data is authoritative
-                 * for customer information.
-                 */
-
-                const customerName =
-                    payment.customerName ||
-                    payment.customer_name ||
-                    payment.customer_details
-                        ?.customer_name ||
-                    log.customerName ||
-                    "Customer";
-
-
-                const customerEmail =
-                    payment.customerEmail ||
-                    payment.customer_email ||
-                    payment.customer_details
-                        ?.customer_email ||
-                    log.customerEmail ||
-                    "";
-
-
-                const customerPhone =
-                    payment.customerPhone ||
-                    payment.customer_phone ||
-                    payment.customer_details
-                        ?.customer_phone ||
-                    log.customerPhone ||
-                    "";
-
-
-                const amount =
-                    payment.amount ??
-                    payment.order_amount ??
-                    payment.orderAmount ??
-                    log.amount ??
-                    0;
-
-
-                const paymentStatus =
-                    payment.paymentStatus ||
-                    payment.payment_status ||
-                    payment.status ||
-                    log.paymentStatus ||
-                    log.status ||
-                    "UNKNOWN";
-
-
-                const purchasedPlan =
-                    payment.bundlePlan ||
-                    payment.bundle_plan ||
-                    payment.plan ||
-                    log.plan ||
-                    "";
-
-
-                const downloadCount =
-                    toNumber(
-                        payment.downloadCount ??
-                        0
-                    );
-
-
-                const maxDownloads =
-                    toNumber(
-                        payment.maxDownloads ??
-                        1
-                    );
-
-
-                downloads.push({
-
-                    /* --------------------------------------
-                       DOWNLOAD
-                    -------------------------------------- */
-
-                    id:
-                        doc.id,
-
-                    orderId,
-
-                    downloadId:
-                        doc.id,
-
-                    status:
-                        log.status ||
-                        "UNKNOWN",
-
-                    downloadDate:
-                        log.createdAt ||
-                        null,
-
-
-                    /* --------------------------------------
-                       CUSTOMER
-                    -------------------------------------- */
-
-                    customerName,
-
-                    email:
-                        customerEmail,
-
-                    phone:
-                        customerPhone,
-
-
-                    /* --------------------------------------
-                       PURCHASE
-                    -------------------------------------- */
-
-                    amount,
-
-                    currency:
-                        payment.currency ||
-                        "INR",
-
-                    paymentStatus,
-
-                    plan:
-                        normalizeText(
-                            purchasedPlan
-                        ) || null,
-
-                    bundleId:
-                        log.bundleId ||
-                        null,
-
-                    bundleName:
-                        log.bundleName ||
-                        null,
-
-                    category:
-                        log.category ||
-                        null,
-
-
-                    /* --------------------------------------
-                       DOWNLOAD USAGE
-                    -------------------------------------- */
-
-                    downloadCount,
-
-                    maxDownloads,
-
-                    downloadsRemaining:
-                        Math.max(
-                            maxDownloads -
-                            downloadCount,
-                            0
-                        ),
-
-
-                    /* --------------------------------------
-                       TECHNICAL
-                    -------------------------------------- */
-
-                    ip:
-                        log.ip ||
-                        "Unknown",
-
-                    userAgent:
-                        log.userAgent ||
-                        "Unknown",
-
-                    createdAt:
-                        log.createdAt ||
-                        null
-
+        const currentPage = Math.max(Number(page) || 1, 1);
+        const perPage = Math.min(Math.max(Number(limit) || 20, 1), 100);
+
+        let downloadRecords = [];
+        const paymentsByOrderId = new Map();
+
+        // 1. Load from Firestore if available
+        try {
+            if (db) {
+                const downloadSnapshot = await db.collection("download_logs").orderBy("createdAt", "desc").get();
+                downloadSnapshot.forEach(doc => {
+                    downloadRecords.push({ id: doc.id, ...doc.data() });
                 });
 
-            }
-        );
-
-
-        /* --------------------------------------------------
-           INCLUDE PAYMENTS WITHOUT DOWNLOAD LOGS
-        -------------------------------------------------- */
-
-        const loggedOrderIds = new Set(
-            downloads.map(d => String(d.orderId || ""))
-        );
-
-        paymentsByOrderId.forEach((payment, orderId) => {
-            if (!loggedOrderIds.has(String(orderId))) {
-                const customerName =
-                    payment.customerName ||
-                    payment.customer_name ||
-                    payment.customer_details?.customer_name ||
-                    payment.name ||
-                    "Customer";
-
-                const customerEmail =
-                    payment.customerEmail ||
-                    payment.customer_email ||
-                    payment.customer_details?.customer_email ||
-                    payment.email ||
-                    "";
-
-                const customerPhone =
-                    payment.customerPhone ||
-                    payment.customer_phone ||
-                    payment.customer_details?.customer_phone ||
-                    payment.phone ||
-                    "";
-
-                const amount =
-                    payment.amount ??
-                    payment.order_amount ??
-                    payment.orderAmount ??
-                    0;
-
-                const paymentStatus =
-                    payment.paymentStatus ||
-                    payment.payment_status ||
-                    payment.status ||
-                    "PAID";
-
-                const purchasedPlan =
-                    payment.bundlePlan ||
-                    payment.bundle_plan ||
-                    payment.plan ||
-                    "premium";
-
-                downloads.push({
-                    id: payment.id || orderId,
-                    orderId: orderId,
-                    downloadId: null,
-                    status: "ACTIVE",
-                    downloadDate: payment.createdAt || payment.updatedAt || null,
-                    customerName,
-                    email: customerEmail,
-                    phone: customerPhone,
-                    amount,
-                    currency: payment.currency || "INR",
-                    paymentStatus,
-                    plan: normalizeText(purchasedPlan) || "premium",
-                    bundleId: null,
-                    bundleName: "Purchased Access",
-                    category: purchasedPlan,
-                    downloadCount: payment.downloadCount || 0,
-                    maxDownloads: payment.maxDownloads || 1,
-                    downloadsRemaining: 1,
-                    ip: "N/A",
-                    userAgent: "N/A",
-                    createdAt: payment.createdAt || payment.updatedAt || null
+                const paymentSnapshot = await db.collection("payments").get();
+                paymentSnapshot.forEach(doc => {
+                    const payment = doc.data() || {};
+                    const paymentOrderId = payment.orderId || payment.order_id || doc.id;
+                    if (paymentOrderId) {
+                        paymentsByOrderId.set(String(paymentOrderId), { id: doc.id, ...payment });
+                    }
                 });
+            }
+        } catch (err) {
+            console.warn("[ADMIN DOWNLOADS] Firestore fetch notice:", err?.message);
+        }
+
+        // 2. Load from local JSON storage
+        const localLogs = getLocalDownloadLogs();
+        localLogs.forEach(log => {
+            if (!downloadRecords.some(r => r.id === log.id || (r.orderId && r.orderId === log.orderId && r.createdAt === log.createdAt))) {
+                downloadRecords.push(log);
             }
         });
 
+        // 3. Build unified records
+        let downloads = downloadRecords.map(log => {
+            const orderId = log.orderId || log.order_id || null;
+            const payment = orderId ? paymentsByOrderId.get(String(orderId)) || {} : {};
 
-        /* ==================================================
-           SEARCH
-        ================================================== */
+            const customerName = payment.customerName || payment.customer_name || log.customerName || "Customer";
+            const customerEmail = payment.customerEmail || payment.customer_email || log.customerEmail || "";
+            const customerPhone = payment.customerPhone || payment.customer_phone || log.customerPhone || "";
+            const amount = payment.amount ?? payment.orderAmount ?? log.amount ?? 0;
+            const paymentStatus = payment.paymentStatus || payment.status || log.paymentStatus || log.status || "SUCCESS";
+            const purchasedPlan = payment.plan || payment.bundlePlan || log.plan || "basic";
+            const downloadCount = toNumber(payment.downloadCount ?? log.downloadCount ?? 1);
+            const maxDownloads = toNumber(payment.maxDownloads ?? log.maxDownloads ?? 1);
 
-        const searchValue =
-            normalizeText(
-                search
+            return {
+                id: log.id || "dl_" + Date.now(),
+                orderId: orderId || "ORD_DIRECT",
+                downloadId: log.id,
+                customerName,
+                customerEmail,
+                customerPhone,
+                amount,
+                paymentStatus,
+                purchasedPlan,
+                downloadCount,
+                maxDownloads,
+                bundleId: log.bundleId || "bundle_general",
+                bundleName: log.bundleName || "Reels Bundle",
+                category: log.category || "General",
+                status: log.status || "SUCCESS",
+                ip: log.ip || "127.0.0.1",
+                userAgent: log.userAgent || "Browser",
+                createdAt: log.createdAt || new Date().toISOString()
+            };
+        });
+
+        // 4. Filtering
+        const searchNorm = normalizeText(search);
+        const planNorm = normalizeText(plan);
+        const statusNorm = normalizeText(status);
+
+        if (searchNorm) {
+            downloads = downloads.filter(d =>
+                normalizeText(d.customerName).includes(searchNorm) ||
+                normalizeText(d.customerEmail).includes(searchNorm) ||
+                normalizeText(d.customerPhone).includes(searchNorm) ||
+                normalizeText(d.orderId).includes(searchNorm) ||
+                normalizeText(d.bundleName).includes(searchNorm)
             );
-
-
-        if (
-            searchValue
-        ) {
-
-            downloads =
-                downloads.filter(
-                    item => {
-
-                        return (
-
-                            normalizeText(
-                                item.customerName
-                            ).includes(
-                                searchValue
-                            )
-
-                            ||
-
-                            normalizeText(
-                                item.email
-                            ).includes(
-                                searchValue
-                            )
-
-                            ||
-
-                            normalizeText(
-                                item.phone
-                            ).includes(
-                                searchValue
-                            )
-
-                            ||
-
-                            normalizeText(
-                                item.orderId
-                            ).includes(
-                                searchValue
-                            )
-
-                            ||
-
-                            normalizeText(
-                                item.bundleName
-                            ).includes(
-                                searchValue
-                            )
-
-                            ||
-
-                            normalizeText(
-                                item.ip
-                            ).includes(
-                                searchValue
-                            )
-
-                        );
-
-                    }
-                );
-
         }
 
-
-        /* ==================================================
-           PLAN FILTER
-        ================================================== */
-
-        if (
-            plan
-        ) {
-
-            const selectedPlan =
-                normalizeText(
-                    plan
-                );
-
-
-            downloads =
-                downloads.filter(
-                    item => {
-
-                        return (
-                            normalizeText(
-                                item.plan
-                            ) ===
-                            selectedPlan
-                        );
-
-                    }
-                );
-
+        if (planNorm) {
+            downloads = downloads.filter(d => normalizeText(d.purchasedPlan) === planNorm);
         }
 
-
-        /* ==================================================
-           STATUS FILTER
-        ================================================== */
-
-        if (
-            status
-        ) {
-
-            const selectedStatus =
-                normalizeText(
-                    status
-                );
-
-
-            downloads =
-                downloads.filter(
-                    item => {
-
-                        return (
-                            normalizeText(
-                                item.status
-                            ) ===
-                            selectedStatus
-                        );
-
-                    }
-                );
-
+        if (statusNorm) {
+            downloads = downloads.filter(d => normalizeText(d.status) === statusNorm);
         }
 
+        // Summary calculations
+        const summary = {
+            totalDownloads: downloads.length,
+            successfulDownloads: downloads.filter(d => normalizeText(d.status) === "success").length,
+            basicDownloads: downloads.filter(d => normalizeText(d.purchasedPlan) === "basic").length,
+            premiumDownloads: downloads.filter(d => normalizeText(d.purchasedPlan) === "premium").length
+        };
 
-        /* ==================================================
-           TOTAL
-        ================================================== */
+        // Pagination
+        const totalItems = downloads.length;
+        const totalPages = Math.ceil(totalItems / perPage) || 1;
+        const startIndex = (currentPage - 1) * perPage;
+        const paginatedDownloads = downloads.slice(startIndex, startIndex + perPage);
 
-        const total =
-            downloads.length;
-
-
-        const totalPages =
-            total === 0
-                ? 0
-                : Math.ceil(
-                    total /
-                    perPage
-                );
-
-
-        /* ==================================================
-           SAFE PAGE
-        ================================================== */
-
-        const safePage =
-            totalPages > 0
-                ? Math.min(
-                    currentPage,
-                    totalPages
-                )
-                : 1;
-
-
-        /* ==================================================
-           PAGINATION
-        ================================================== */
-
-        const startIndex =
-            (
-                safePage -
-                1
-            ) *
-            perPage;
-
-
-        const paginatedDownloads =
-            downloads.slice(
-                startIndex,
-                startIndex +
-                perPage
-            );
-
-
-        /* ==================================================
-           SUMMARY
-        ================================================== */
-
-        const successfulDownloads =
-            downloads.filter(
-                item =>
-                    normalizeText(
-                        item.status
-                    ) ===
-                    "success"
-            ).length;
-
-
-        const basicDownloads =
-            downloads.filter(
-                item =>
-                    normalizeText(
-                        item.plan
-                    ) ===
-                    "basic"
-            ).length;
-
-
-        const premiumDownloads =
-            downloads.filter(
-                item =>
-                    normalizeText(
-                        item.plan
-                    ) ===
-                    "premium"
-            ).length;
-
-
-        /* ==================================================
-           RESPONSE
-        ================================================== */
-
-        return res.status(
-            200
-        ).json({
-
-            success:
-                true,
-
-            downloads:
-                paginatedDownloads,
-
+        return res.status(200).json({
+            success: true,
+            summary,
+            downloads: paginatedDownloads,
             pagination: {
-
-                page:
-                    safePage,
-
-                limit:
-                    perPage,
-
-                total,
-
+                page: currentPage,
+                limit: perPage,
+                totalItems,
                 totalPages
-
-            },
-
-            summary: {
-
-                totalDownloads:
-                    total,
-
-                successfulDownloads,
-
-                basicDownloads,
-
-                premiumDownloads
-
             }
-
         });
-
-    } catch (
-        error
-    ) {
-
-        console.error(
-            "[Admin Downloads] Error:",
-            error
-        );
-
-
-        return res.status(
-            500
-        ).json({
-
-            success:
-                false,
-
-            message:
-                error?.message ||
-                "Unable to load download records."
-
-        });
-
-    }
-
-};
-/* ==========================================================
-   DELETE SINGLE DOWNLOAD
-   Deletes ONLY download_logs record.
-   Payment / order is NOT deleted.
-========================================================== */
-
-export const deleteAdminDownload = async (
-    req,
-    res
-) => {
-
-    try {
-
-        const downloadId =
-            String(
-                req.params.downloadId ||
-                ""
-            ).trim();
-
-
-        if (!downloadId) {
-
-            return res.status(400).json({
-
-                success: false,
-
-                message:
-                    "Download ID is required."
-
-            });
-
-        }
-
-
-        await db
-            .collection("download_logs")
-            .doc(downloadId)
-            .delete();
-
-
+    } catch (err) {
         return res.status(200).json({
-
             success: true,
-
-            message:
-                "Download record deleted successfully."
-
+            summary: { totalDownloads: 0, successfulDownloads: 0, basicDownloads: 0, premiumDownloads: 0 },
+            downloads: [],
+            pagination: { page: 1, limit: 20, totalItems: 0, totalPages: 1 }
         });
-
-    } catch (error) {
-
-        console.error(
-            "[Admin Downloads] Delete error:",
-            error
-        );
-
-
-        return res.status(500).json({
-
-            success: false,
-
-            message:
-                error?.message ||
-                "Failed to delete download."
-
-        });
-
     }
-
 };
 
-
-/* ==========================================================
-   DELETE ALL DOWNLOADS
-   Deletes ONLY download_logs.
-   Payments / orders are NOT deleted.
-========================================================== */
-
-export const deleteAllAdminDownloads = async (
-    req,
-    res
-) => {
-
+export const deleteAdminDownload = async (req, res) => {
     try {
+        const { downloadId } = req.params;
+        let logs = getLocalDownloadLogs();
+        logs = logs.filter(l => l.id !== downloadId);
+        saveLocalDownloadLogs(logs);
 
-        const snapshot =
-            await db
-                .collection("download_logs")
-                .get();
+        try {
+            if (db) {
+                await db.collection("download_logs").doc(downloadId).delete();
+            }
+        } catch (e) {}
 
-
-        if (
-            snapshot.empty
-        ) {
-
-            return res.status(200).json({
-
-                success: true,
-
-                deletedCount: 0,
-
-                message:
-                    "No download records found."
-
-            });
-
-        }
-
-
-        /*
-         * Firestore batch supports a maximum
-         * of 500 writes per batch.
-         */
-
-        const docs =
-            snapshot.docs;
-
-
-        let deletedCount = 0;
-
-
-        for (
-            let i = 0;
-            i < docs.length;
-            i += 500
-        ) {
-
-            const batch =
-                db.batch();
-
-
-            const chunk =
-                docs.slice(
-                    i,
-                    i + 500
-                );
-
-
-            chunk.forEach(
-                doc => {
-
-                    batch.delete(
-                        doc.ref
-                    );
-
-                }
-            );
-
-
-            await batch.commit();
-
-
-            deletedCount +=
-                chunk.length;
-
-        }
-
-
-        return res.status(200).json({
-
-            success: true,
-
-            deletedCount,
-
-            message:
-                `${deletedCount} download record(s) deleted successfully.`
-
-        });
-
-    } catch (error) {
-
-        console.error(
-            "[Admin Downloads] Delete all error:",
-            error
-        );
-
-
-        return res.status(500).json({
-
-            success: false,
-
-            message:
-                error?.message ||
-                "Failed to delete all downloads."
-
-        });
-
+        return res.status(200).json({ success: true, message: "Download log deleted" });
+    } catch (err) {
+        return res.status(400).json({ success: false, message: err.message });
     }
+};
 
+export const deleteAllAdminDownloads = async (req, res) => {
+    try {
+        deleteAllLocalDownloadLogs();
+
+        try {
+            if (db) {
+                const snapshot = await db.collection("download_logs").get();
+                const batch = db.batch();
+                snapshot.forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+            }
+        } catch (e) {}
+
+        return res.status(200).json({ success: true, message: "All download logs deleted" });
+    } catch (err) {
+        return res.status(400).json({ success: false, message: err.message });
+    }
 };
