@@ -19,7 +19,7 @@ import secureDownloadRoutes
     from "./routes/secure-download.routes.js";
 import couponRoutes from "./routes/coupon.routes.js";
 import demoVideoRoutes from "./routes/demo-video.routes.js";
-import settingsRoutes from "./routes/settings.routes.js";
+import protectionRoutes from "./routes/protection.routes.js";
 
 import "./config/env.js";
 
@@ -491,8 +491,13 @@ app.use(
 );
 
 app.use(
-    "/api",
-    settingsRoutes
+    "/api/protection",
+    protectionRoutes
+);
+
+app.use(
+    "/api/admin/protection",
+    protectionRoutes
 );
 
 

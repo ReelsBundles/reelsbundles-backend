@@ -1,7 +1,7 @@
 import {
     getProtectionSettings,
     updateProtectionSettings
-} from "../services/settings-storage.service.js";
+} from "../services/protection-storage.service.js";
 
 export async function getPublicProtectionSettings(req, res) {
     try {
@@ -11,7 +11,7 @@ export async function getPublicProtectionSettings(req, res) {
             settings
         });
     } catch (error) {
-        console.error("[SETTINGS] Public fetch error:", error);
+        console.error("[PROTECTION] Public fetch error:", error);
         return res.status(500).json({
             success: false,
             message: "Unable to load site protection settings."
@@ -33,7 +33,7 @@ export async function updateAdminProtectionSettings(req, res) {
             settings: updated
         });
     } catch (error) {
-        console.error("[SETTINGS] Admin update error:", error);
+        console.error("[PROTECTION] Admin update error:", error);
         return res.status(500).json({
             success: false,
             message: "Failed to update protection settings."
