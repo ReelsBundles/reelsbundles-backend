@@ -295,33 +295,21 @@ export async function getBundle(
    CREATE BUNDLE
 ========================================================== */
 
-export async function createBundle(
-    data
-) {
+export async function createBundle(data) {
+    const bundle = normalizeBundle(data);
 
-    const bundle =
-        normalizeBundle(
-            data
-        );
-
-
-    const exists =
-        await slugExists(
-            bundle.slug
-        );
-
-
+    let exists = await slugExists(bundle.slug);
     if (exists) {
-
-        throw new Error(
-            "Bundle already exists."
-        );
-
+        let counter = 1;
+        const originalSlug = bundle.slug;
+        while (exists) {
+            counter++;
+            bundle.slug = `${originalSlug}-${counter}`;
+            exists = await slugExists(bundle.slug);
+        }
     }
 
-
-    bundle.createdAt =
-        now();
+    bundle.createdAt = now();
 
 
     const doc =
