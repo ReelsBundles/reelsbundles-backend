@@ -22,6 +22,7 @@ import demoVideoRoutes from "./routes/demo-video.routes.js";
 import protectionRoutes from "./routes/protection.routes.js";
 
 import "./config/env.js";
+import { SYSTEM_VERSION } from "./config/version.js";
 
 import path from "path";
 import { fileURLToPath } from "url";
