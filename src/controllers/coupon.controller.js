@@ -64,7 +64,7 @@ export const applyCoupon = async (req, res) => {
             discountAmount = originalPrice;
         }
 
-        const finalPrice = Math.max(0, originalPrice - discountAmount);
+        const finalPrice = Math.max(1, originalPrice - discountAmount);
 
         return res.json({
             success: true,
