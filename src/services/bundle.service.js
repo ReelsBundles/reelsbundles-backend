@@ -119,6 +119,14 @@ function normalizeBundle(data) {
         data.premium?.folderLink || data.premium?.folderId || ""
     ).trim();
 
+    const basicMegaLink = String(
+        data.basic?.megaLink || data.basic?.megaUrl || data.megaLink || ""
+    ).trim();
+
+    const premiumMegaLink = String(
+        data.premium?.megaLink || data.premium?.megaUrl || data.megaLink || ""
+    ).trim();
+
     let basicFolderId = "";
     let premiumFolderId = "";
 
@@ -127,14 +135,15 @@ function normalizeBundle(data) {
             throw new Error("Basic bundle title is required.");
         }
 
-        if (!basicFolderLink) {
-            throw new Error("Basic Google Drive Folder Link is required.");
+        if (!basicFolderLink && !basicMegaLink) {
+            throw new Error("At least one storage link (Google Drive or MEGA.nz) is required for Basic plan.");
         }
 
-        basicFolderId = extractFileId(basicFolderLink);
-
-        if (!isValidFileId(basicFolderId)) {
-            throw new Error("Invalid Basic Google Drive Folder Link.");
+        if (basicFolderLink) {
+            basicFolderId = extractFileId(basicFolderLink);
+            if (!isValidFileId(basicFolderId)) {
+                throw new Error("Invalid Basic Google Drive Folder Link.");
+            }
         }
     }
 
@@ -143,14 +152,15 @@ function normalizeBundle(data) {
             throw new Error("Premium bundle title is required.");
         }
 
-        if (!premiumFolderLink) {
-            throw new Error("Premium Google Drive Folder Link is required.");
+        if (!premiumFolderLink && !premiumMegaLink) {
+            throw new Error("At least one storage link (Google Drive or MEGA.nz) is required for Premium plan.");
         }
 
-        premiumFolderId = extractFileId(premiumFolderLink);
-
-        if (!isValidFileId(premiumFolderId)) {
-            throw new Error("Invalid Premium Google Drive Folder Link.");
+        if (premiumFolderLink) {
+            premiumFolderId = extractFileId(premiumFolderLink);
+            if (!isValidFileId(premiumFolderId)) {
+                throw new Error("Invalid Premium Google Drive Folder Link.");
+            }
         }
     }
 
@@ -164,13 +174,17 @@ function normalizeBundle(data) {
         basic: {
             title: plan === "basic" ? basicTitle : "",
             fileId: null,
-            folderId: plan === "basic" ? encrypt(basicFolderId) : null
+            folderId: plan === "basic" && basicFolderId ? encrypt(basicFolderId) : null,
+            folderLink: plan === "basic" ? basicFolderLink : "",
+            megaLink: plan === "basic" ? basicMegaLink : ""
         },
 
         premium: {
             title: plan === "premium" ? premiumTitle : "",
             fileId: null,
-            folderId: plan === "premium" ? encrypt(premiumFolderId) : null
+            folderId: plan === "premium" && premiumFolderId ? encrypt(premiumFolderId) : null,
+            folderLink: plan === "premium" ? premiumFolderLink : "",
+            megaLink: plan === "premium" ? premiumMegaLink : ""
         },
 
         active: Boolean(data.active),

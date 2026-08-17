@@ -139,7 +139,7 @@ function formatThumbnailUrl(value) {
     return str;
 }
 
-function safeBundle(bundle) {
+function safeBundle(bundle, isUnlocked = false) {
     const plan = normalizePlan(bundle?.plan);
     const planData = bundle?.[plan] || {};
     const active = bundle?.active === true;
@@ -151,6 +151,9 @@ function safeBundle(bundle) {
         bundle?.basic?.thumbnail ||
         bundle?.premium?.thumbnail ||
         null;
+
+    const driveLink = isUnlocked ? (planData.folderLink || (planData.folderId ? `https://drive.google.com/drive/folders/${planData.folderId}` : null)) : null;
+    const megaLink = isUnlocked ? (planData.megaLink || bundle.megaLink || null) : null;
 
     return {
         id: bundle.id,
@@ -169,7 +172,9 @@ function safeBundle(bundle) {
         thumbnail: formatThumbnailUrl(rawThumb),
         active,
         locked: !active,
-        status: active ? "ACTIVE" : "LOCKED"
+        status: active ? "ACTIVE" : "LOCKED",
+        driveLink,
+        megaLink
     };
 }
 
@@ -196,10 +201,12 @@ export async function getUserBundleLibrary(user) {
     const bundles = Array.isArray(allBundles)
         ? allBundles
             .map(bundle => {
-                const safe = safeBundle(bundle);
+                const plan = normalizePlan(bundle?.plan);
+                const isUnlocked = entitlementSet.has(plan) && bundle?.active === true;
+                const safe = safeBundle(bundle, isUnlocked);
                 return {
                     ...safe,
-                    unlocked: entitlementSet.has(safe.plan) && safe.active === true
+                    unlocked: isUnlocked
                 };
             })
             .filter(bundle =>
