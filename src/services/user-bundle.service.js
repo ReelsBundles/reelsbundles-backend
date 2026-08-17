@@ -152,6 +152,8 @@ function safeBundle(bundle, isUnlocked = false) {
         bundle?.premium?.thumbnail ||
         null;
 
+    const megaLink = isUnlocked ? (planData.megaLink || bundle?.megaLink || null) : null;
+
     return {
         id: bundle.id,
         name: bundle.name || "Reels Bundle",
@@ -170,7 +172,8 @@ function safeBundle(bundle, isUnlocked = false) {
         active,
         locked: !active,
         status: active ? "ACTIVE" : "LOCKED",
-        unlocked: isUnlocked
+        unlocked: isUnlocked,
+        hasMega: Boolean(megaLink)
     };
 }
 
@@ -187,35 +190,14 @@ export async function getUserBundleLibrary(user) {
         normalizedPlans.add("basic");
     }
 
-    const finalPlans = [...normalizedPlans].sort(
-        (a, b) => a === b ? 0 : a === "basic" ? -1 : 1
-    );
-
+    const finalPlans = [...normalizedPlans];
     const allBundles = await getBundles();
-    const entitlementSet = new Set(finalPlans);
 
-    const bundles = Array.isArray(allBundles)
-        ? allBundles
-            .map(bundle => {
-                const plan = normalizePlan(bundle?.plan);
-                const isUnlocked = entitlementSet.has(plan) && bundle?.active === true;
-                const safe = safeBundle(bundle, isUnlocked);
-                return {
-                    ...safe,
-                    unlocked: isUnlocked
-                };
-            })
-            .filter(bundle =>
-                bundle &&
-                (bundle.plan === "basic" || bundle.plan === "premium")
-            )
-            .sort((a, b) => {
-                if (a.plan !== b.plan) return a.plan === "basic" ? -1 : 1;
-                const pageDiff = (Number(a.page) || 0) - (Number(b.page) || 0);
-                if (pageDiff !== 0) return pageDiff;
-                return String(a.name || "").localeCompare(String(b.name || ""));
-            })
-        : [];
+    const bundles = allBundles.map(bundle => {
+        const plan = normalizePlan(bundle.plan);
+        const unlocked = Boolean(plan && normalizedPlans.has(plan));
+        return safeBundle(bundle, unlocked);
+    });
 
     return {
         lifetimeAccess: finalPlans.length > 0,
@@ -224,9 +206,12 @@ export async function getUserBundleLibrary(user) {
     };
 }
 
-function getAuthorizedFolderId(bundle, plan) {
+function getAuthorizedStorageLinks(bundle, plan) {
     const planData = bundle?.[plan] || {};
-    return planData.folderId || planData.fileId || null;
+    const folderId = planData.folderId || planData.fileId || null;
+    const folderLink = planData.folderLink || null;
+    const megaLink = planData.megaLink || bundle?.megaLink || null;
+    return { folderId, folderLink, megaLink };
 }
 
 async function authorizeBundle(user, bundleId) {
@@ -264,13 +249,13 @@ async function authorizeBundle(user, bundleId) {
         };
     }
 
-    const folderId = getAuthorizedFolderId(bundle, plan);
+    const storage = getAuthorizedStorageLinks(bundle, plan);
 
-    if (!folderId) {
+    if (!storage.folderId && !storage.folderLink && !storage.megaLink) {
         return {
             ok: false,
             status: 404,
-            message: "Google Drive folder is not configured for this bundle."
+            message: "No cloud storage links are configured for this bundle."
         };
     }
 
@@ -278,7 +263,9 @@ async function authorizeBundle(user, bundleId) {
         ok: true,
         bundle,
         plan,
-        folderId
+        folderId: storage.folderId,
+        folderLink: storage.folderLink,
+        megaLink: storage.megaLink
     };
 }
 
@@ -290,49 +277,60 @@ export async function getUserBundle(user, bundleId) {
     return {
         ok: true,
         status: 200,
-        bundle: safeBundle(access.bundle),
-        folderId: access.folderId
+        bundle: safeBundle(access.bundle, true),
+        folderId: access.folderId,
+        megaLink: access.megaLink
     };
 }
 
 /*
  * Secure folder listing.
- * The Drive folder ID is accepted only by the backend and is never
- * converted into a drive.google.com URL.
+ * Supports Google Drive folders and MEGA Cloud links.
  */
 export async function getUserBundleFiles(user, bundleId, requestedFolderId = null) {
     const access = await authorizeBundle(user, bundleId);
     if (!access.ok) return access;
 
-    const folderId = requestedFolderId || access.folderId;
+    let items = [];
 
-    if (requestedFolderId) {
-        const allowed = await isDriveItemWithinRoot(
-            requestedFolderId,
-            access.folderId
-        );
-
-        if (!allowed) {
-            return {
-                ok: false,
-                status: 403,
-                message: "This folder does not belong to the selected bundle."
-            };
+    if (access.folderId) {
+        const folderId = requestedFolderId || access.folderId;
+        if (requestedFolderId) {
+            const allowed = await isDriveItemWithinRoot(
+                requestedFolderId,
+                access.folderId
+            );
+            if (!allowed) {
+                return {
+                    ok: false,
+                    status: 403,
+                    message: "This folder does not belong to the selected bundle."
+                };
+            }
+        }
+        try {
+            items = await listDriveFolder(folderId);
+        } catch (e) {
+            console.warn("[getUserBundleFiles] Drive fetch error:", e.message);
         }
     }
 
-    /*
-     * For the root folder, use the configured bundle folder.
-     * For nested folders, the controller only accepts an ID that came
-     * from the already-authorized bundle browsing flow. The Drive API
-     * itself enforces service-account access to the folder.
-     */
-    const items = await listDriveFolder(folderId);
+    // Append MEGA Cloud storage item if MEGA link is configured for this bundle
+    if (access.megaLink && !requestedFolderId) {
+        items.unshift({
+            id: `mega_${access.bundle.id}`,
+            name: `${access.bundle.name || 'Reels Bundle'} (MEGA Cloud Storage)`,
+            type: "mega",
+            mimeType: "application/vnd.mega.cloud-storage",
+            megaLink: access.megaLink,
+            size: null
+        });
+    }
 
     return {
         ok: true,
         status: 200,
-        bundle: safeBundle(access.bundle),
+        bundle: safeBundle(access.bundle, true),
         items,
         root: !requestedFolderId
     };
