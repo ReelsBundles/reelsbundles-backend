@@ -495,16 +495,6 @@ app.use(
     protectionRoutes
 );
 
-app.use(
-    "/api/protection",
-    protectionRoutes
-);
-
-app.use(
-    "/api/admin/protection",
-    protectionRoutes
-);
-
 
 /* ==========================================================
    HEALTH CHECK
