@@ -101,85 +101,32 @@ export const adminAuth = (
 
 export const firebaseUserAuth = async (req, res, next) => {
     try {
+        const authHeader = req.headers.authorization;
+        let idToken = null;
 
-        const authHeader =
-            req.headers.authorization;
-
-
-        if (!authHeader) {
-
-            return res.status(401).json({
-
-                success: false,
-
-                message:
-                    "Authentication required."
-
-            });
-
+        if (authHeader && authHeader.startsWith("Bearer ")) {
+            idToken = authHeader.substring(7).trim();
+        } else if (req.query?.token) {
+            idToken = String(req.query.token).trim();
         }
-
-
-        if (
-            !authHeader.startsWith(
-                "Bearer "
-            )
-        ) {
-
-            return res.status(401).json({
-
-                success: false,
-
-                message:
-                    "Invalid authorization format."
-
-            });
-
-        }
-
-
-        const idToken =
-            authHeader.substring(
-                7
-            ).trim();
-
 
         if (!idToken) {
-
             return res.status(401).json({
-
                 success: false,
-
-                message:
-                    "Firebase ID Token missing."
-
+                message: "Authentication required."
             });
-
         }
 
+        const decodedUser = await auth.verifyIdToken(idToken);
 
-        const decodedUser =
-            await auth.verifyIdToken(
-                idToken
-            );
-
-
-        if (
-            !decodedUser ||
-            !decodedUser.uid
-        ) {
-
+        if (!decodedUser || !decodedUser.uid) {
             return res.status(401).json({
-
                 success: false,
-
-                message:
-                    "Invalid Firebase user."
-
+                message: "Invalid Firebase user."
             });
-
         }
 
+        req.user = decodedUser;
         const userId = decodedUser.uid;
         const currentIp = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
         const currentUserAgent = req.headers["user-agent"] || "";
