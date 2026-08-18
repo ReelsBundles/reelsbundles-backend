@@ -208,9 +208,14 @@ export async function getUserBundleLibrary(user) {
 
 function getAuthorizedStorageLinks(bundle, plan) {
     const planData = bundle?.[plan] || {};
-    const folderId = planData.folderId || planData.fileId || null;
-    const folderLink = planData.folderLink || null;
-    const megaLink = planData.megaLink || bundle?.megaLink || null;
+    let folderId = planData.folderId || planData.fileId || bundle?.folderId || bundle?.fileId || bundle?.basic?.folderId || bundle?.premium?.folderId || null;
+    let folderLink = planData.folderLink || bundle?.folderLink || bundle?.basic?.folderLink || bundle?.premium?.folderLink || null;
+    let megaLink = planData.megaLink || bundle?.megaLink || bundle?.basic?.megaLink || bundle?.premium?.megaLink || null;
+
+    if (!folderId && folderLink) {
+        folderId = extractFileId(folderLink);
+    }
+
     return { folderId, folderLink, megaLink };
 }
 
@@ -313,6 +318,18 @@ export async function getUserBundleFiles(user, bundleId, requestedFolderId = nul
         } catch (e) {
             console.warn("[getUserBundleFiles] Drive fetch error:", e.message);
         }
+    }
+
+    // Fallback Drive item if drive list is empty or service account unavailable, but folderLink is present
+    if (items.length === 0 && access.folderLink && !requestedFolderId) {
+        items.push({
+            id: `drive_${access.bundle.id}`,
+            name: `${access.bundle.name || 'Reels Bundle'} (Google Drive Folder)`,
+            type: "drive",
+            mimeType: "application/vnd.google-apps.folder",
+            folderLink: access.folderLink,
+            size: null
+        });
     }
 
     // Append MEGA Cloud storage item if MEGA link is configured for this bundle

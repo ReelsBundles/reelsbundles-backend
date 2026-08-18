@@ -91,7 +91,8 @@ export async function listUserBundleFiles(req, res) {
                     mimeType: item.mimeType || null,
                     size: item.size ?? null,
                     modifiedTime: item.modifiedTime || null,
-                    megaLink: item.megaLink || null
+                    megaLink: item.megaLink || null,
+                    folderLink: item.folderLink || null
                 }))
                 : []
         });
