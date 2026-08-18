@@ -90,9 +90,7 @@ export async function listUserBundleFiles(req, res) {
                     type: item.type,
                     mimeType: item.mimeType || null,
                     size: item.size ?? null,
-                    modifiedTime: item.modifiedTime || null,
-                    megaLink: item.megaLink || null,
-                    folderLink: item.folderLink || null
+                    modifiedTime: item.modifiedTime || null
                 }))
                 : []
         });
@@ -212,6 +210,63 @@ export async function downloadUserBundle(req, res) {
         return res.status(500).json({
             success: false,
             message: "Unable to prepare the secure download."
+        });
+    }
+}
+
+/*
+ * GET /api/user/bundles/:bundleId/mega
+ *
+ * Secure redirect for MEGA cloud storage links.
+ * Verifies Firebase token, ownership, and bundle lock status before redirecting.
+ */
+export async function openUserBundleMega(req, res) {
+    try {
+        const user = req.user;
+
+        if (!user?.uid) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required."
+            });
+        }
+
+        const bundleId = String(req.params.bundleId || "").trim();
+
+        if (!bundleId) {
+            return res.status(400).json({
+                success: false,
+                message: "Bundle ID is required."
+            });
+        }
+
+        const access = await getUserBundle(user, bundleId);
+
+        if (access.ok !== true) {
+            return res.status(access.status || 403).json({
+                success: false,
+                message: access.message || "Access denied."
+            });
+        }
+
+        if (!access.megaLink) {
+            return res.status(404).json({
+                success: false,
+                message: "MEGA Cloud Storage is not configured for this bundle."
+            });
+        }
+
+        let targetUrl = String(access.megaLink).trim();
+        if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
+            targetUrl = "https://" + targetUrl;
+        }
+
+        return res.redirect(302, targetUrl);
+    } catch (error) {
+        console.error("[User Bundle] MEGA open error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to open MEGA storage."
         });
     }
 }

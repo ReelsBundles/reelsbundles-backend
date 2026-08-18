@@ -8,7 +8,8 @@ import {
     getUserBundles,
     listUserBundleFiles,
     downloadUserBundleFile,
-    downloadUserBundle
+    downloadUserBundle,
+    openUserBundleMega
 } from "../controllers/user-bundle.controller.js";
 
 const router = express.Router();
@@ -34,6 +35,13 @@ router.get(
     "/bundles/:bundleId/file/:fileId",
     firebaseUserAuth,
     downloadUserBundleFile
+);
+
+/* Secure MEGA cloud link redirect */
+router.get(
+    "/bundles/:bundleId/mega",
+    firebaseUserAuth,
+    openUserBundleMega
 );
 
 /* Legacy compatibility endpoint */
