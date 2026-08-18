@@ -90,7 +90,8 @@ export async function listUserBundleFiles(req, res) {
                     type: item.type,
                     mimeType: item.mimeType || null,
                     size: item.size ?? null,
-                    modifiedTime: item.modifiedTime || null
+                    modifiedTime: item.modifiedTime || null,
+                    isMega: item.isMega === true || item.type === "mega" || Boolean(item.megaLink)
                 }))
                 : []
         });

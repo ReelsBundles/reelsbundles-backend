@@ -93,7 +93,7 @@ export async function listDriveFolder(folderId) {
     do {
         const response = await drive.files.list({
             q: `'${folderId}' in parents and trashed = false`,
-            fields: "nextPageToken,files(id,name,mimeType,size,modifiedTime,parents)",
+            fields: "nextPageToken,files(id,name,mimeType,size,modifiedTime,parents,shortcutDetails)",
             pageSize: 1000,
             pageToken,
             orderBy: "folder,name",
@@ -102,13 +102,17 @@ export async function listDriveFolder(folderId) {
         });
 
         for (const item of response.data.files || []) {
-            const isFolder = item.mimeType === "application/vnd.google-apps.folder";
+            const isShortcut = item.mimeType === "application/vnd.google-apps.shortcut";
+            const targetId = isShortcut && item.shortcutDetails?.targetId ? item.shortcutDetails.targetId : item.id;
+            const targetMime = isShortcut && item.shortcutDetails?.targetMimeType ? item.shortcutDetails.targetMimeType : item.mimeType;
+
+            const isFolder = targetMime === "application/vnd.google-apps.folder" || isShortcut;
 
             items.push({
-                id: item.id,
+                id: targetId,
                 name: item.name,
                 type: isFolder ? "folder" : "file",
-                mimeType: item.mimeType || null,
+                mimeType: targetMime || item.mimeType || null,
                 size: item.size ? Number(item.size) : null,
                 modifiedTime: item.modifiedTime || null,
                 parents: Array.isArray(item.parents) ? item.parents : []

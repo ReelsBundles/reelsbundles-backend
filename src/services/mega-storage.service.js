@@ -84,7 +84,8 @@ export async function listMegaFolder(megaLink, requestedFolderId = null) {
                     mimeType,
                     size: isFolder ? null : (child.size || null),
                     modifiedTime: child.timestamp ? new Date(child.timestamp * 1000).toISOString() : null,
-                    megaLink: cleanLink
+                    megaLink: cleanLink,
+                    isMega: true
                 });
             });
         } else if (targetNode.name && targetNode !== rootFile) {
@@ -100,7 +101,8 @@ export async function listMegaFolder(megaLink, requestedFolderId = null) {
                 mimeType,
                 size: isFolder ? null : (targetNode.size || null),
                 modifiedTime: targetNode.timestamp ? new Date(targetNode.timestamp * 1000).toISOString() : null,
-                megaLink: cleanLink
+                megaLink: cleanLink,
+                isMega: true
             });
         }
 
