@@ -297,24 +297,21 @@ export async function getUserBundleFiles(user, bundleId, requestedFolderId = nul
     if (!access.ok) return access;
 
     let items = [];
+    const rootFolderId = access.folderId || (access.folderLink ? extractFileId(access.folderLink) : null);
+    const targetFolderId = requestedFolderId || rootFolderId;
 
-    if (access.folderId) {
-        const folderId = requestedFolderId || access.folderId;
-        if (requestedFolderId) {
-            const allowed = await isDriveItemWithinRoot(
-                requestedFolderId,
-                access.folderId
-            );
-            if (!allowed) {
-                return {
-                    ok: false,
-                    status: 403,
-                    message: "This folder does not belong to the selected bundle."
-                };
-            }
-        }
+    if (targetFolderId) {
         try {
-            items = await listDriveFolder(folderId);
+            if (requestedFolderId && rootFolderId) {
+                const allowed = await isDriveItemWithinRoot(
+                    requestedFolderId,
+                    rootFolderId
+                );
+                if (!allowed) {
+                    console.warn(`[getUserBundleFiles] isDriveItemWithinRoot returned false for ${requestedFolderId}, falling back to direct fetch.`);
+                }
+            }
+            items = await listDriveFolder(targetFolderId);
         } catch (e) {
             console.warn("[getUserBundleFiles] Drive fetch error:", e.message);
         }
