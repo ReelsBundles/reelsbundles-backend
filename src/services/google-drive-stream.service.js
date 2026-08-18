@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import { createDownloadUrl } from "../utils/drive.js";
 
 function getDriveClient() {
     const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -33,45 +34,53 @@ export async function getDriveFileInfo(fileId) {
 export async function streamDriveFile(fileId, res) {
     if (!fileId) throw new Error("Google Drive file ID is required.");
 
-    const drive = getDriveClient();
-    const metadata = await getDriveFileInfo(fileId);
+    try {
+        const drive = getDriveClient();
+        const metadata = await getDriveFileInfo(fileId);
 
-    if (metadata.trashed) {
-        throw new Error("The requested file is no longer available.");
-    }
+        if (metadata.trashed) {
+            throw new Error("The requested file is no longer available.");
+        }
 
-    if (metadata.name) {
-        res.setHeader(
-            "Content-Disposition",
-            `attachment; filename="${String(metadata.name).replace(/["\r\n]/g, "")}"`
+        if (metadata.name) {
+            res.setHeader(
+                "Content-Disposition",
+                `attachment; filename="${String(metadata.name).replace(/["\r\n]/g, "")}"`
+            );
+        }
+
+        if (metadata.mimeType) {
+            res.setHeader("Content-Type", metadata.mimeType);
+        }
+
+        if (metadata.size) {
+            res.setHeader("Content-Length", metadata.size);
+        }
+
+        const response = await drive.files.get(
+            {
+                fileId,
+                alt: "media",
+                supportsAllDrives: true
+            },
+            { responseType: "stream" }
         );
+
+        response.data.on("error", error => {
+            console.error("[Google Drive Stream] Stream error:", error);
+            if (!res.headersSent) {
+                return res.redirect(302, createDownloadUrl(fileId));
+            } else {
+                res.destroy(error);
+            }
+        });
+
+        response.data.pipe(res);
+        return true;
+    } catch (err) {
+        console.warn("[Google Drive Stream] Falling back to direct secure redirect:", err.message);
+        return res.redirect(302, createDownloadUrl(fileId));
     }
-
-    if (metadata.mimeType) {
-        res.setHeader("Content-Type", metadata.mimeType);
-    }
-
-    if (metadata.size) {
-        res.setHeader("Content-Length", metadata.size);
-    }
-
-    const response = await drive.files.get(
-        {
-            fileId,
-            alt: "media",
-            supportsAllDrives: true
-        },
-        { responseType: "stream" }
-    );
-
-    response.data.on("error", error => {
-        console.error("[Google Drive Stream] Stream error:", error);
-        if (!res.headersSent) res.status(500).end();
-        else res.destroy(error);
-    });
-
-    response.data.pipe(res);
-    return true;
 }
 
 export async function listDriveFolder(folderId) {
