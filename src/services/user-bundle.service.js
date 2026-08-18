@@ -4,6 +4,7 @@ import {
     listDriveFolder,
     isDriveItemWithinRoot
 } from "./google-drive-stream.service.js";
+import { listMegaFolder } from "./mega-storage.service.js";
 
 const paymentsCollection = db.collection("payments");
 
@@ -328,17 +329,33 @@ export async function getUserBundleFiles(user, bundleId, requestedFolderId = nul
             size: null
         });
     }
-
-    // Append MEGA Cloud storage item if MEGA link is configured for this bundle
+    // Append MEGA Cloud storage items if MEGA link is configured for this bundle
     if (access.megaLink && !requestedFolderId) {
-        items.unshift({
-            id: `mega_${access.bundle.id}`,
-            name: `${access.bundle.name || 'Reels Bundle'} (MEGA Cloud Storage)`,
-            type: "mega",
-            mimeType: "application/vnd.mega.cloud-storage",
-            megaLink: access.megaLink,
-            size: null
-        });
+        try {
+            const megaItems = await listMegaFolder(access.megaLink);
+            if (Array.isArray(megaItems) && megaItems.length > 0) {
+                items.push(...megaItems);
+            } else {
+                items.unshift({
+                    id: `mega_${access.bundle.id}`,
+                    name: `${access.bundle.name || 'Reels Bundle'} (MEGA Cloud Storage)`,
+                    type: "mega",
+                    mimeType: "application/vnd.mega.cloud-storage",
+                    megaLink: access.megaLink,
+                    size: null
+                });
+            }
+        } catch (err) {
+            console.warn("[getUserBundleFiles] MEGA fetch warning:", err.message);
+            items.unshift({
+                id: `mega_${access.bundle.id}`,
+                name: `${access.bundle.name || 'Reels Bundle'} (MEGA Cloud Storage)`,
+                type: "mega",
+                mimeType: "application/vnd.mega.cloud-storage",
+                megaLink: access.megaLink,
+                size: null
+            });
+        }
     }
 
     return {
