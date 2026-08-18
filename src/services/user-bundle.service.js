@@ -330,12 +330,12 @@ export async function getUserBundleFiles(user, bundleId, requestedFolderId = nul
         });
     }
     // Append MEGA Cloud storage items if MEGA link is configured for this bundle
-    if (access.megaLink && !requestedFolderId) {
+    if (access.megaLink) {
         try {
-            const megaItems = await listMegaFolder(access.megaLink);
+            const megaItems = await listMegaFolder(access.megaLink, requestedFolderId);
             if (Array.isArray(megaItems) && megaItems.length > 0) {
                 items.push(...megaItems);
-            } else {
+            } else if (!requestedFolderId) {
                 items.unshift({
                     id: `mega_${access.bundle.id}`,
                     name: `${access.bundle.name || 'Reels Bundle'} (MEGA Cloud Storage)`,
@@ -347,14 +347,16 @@ export async function getUserBundleFiles(user, bundleId, requestedFolderId = nul
             }
         } catch (err) {
             console.warn("[getUserBundleFiles] MEGA fetch warning:", err.message);
-            items.unshift({
-                id: `mega_${access.bundle.id}`,
-                name: `${access.bundle.name || 'Reels Bundle'} (MEGA Cloud Storage)`,
-                type: "mega",
-                mimeType: "application/vnd.mega.cloud-storage",
-                megaLink: access.megaLink,
-                size: null
-            });
+            if (!requestedFolderId) {
+                items.unshift({
+                    id: `mega_${access.bundle.id}`,
+                    name: `${access.bundle.name || 'Reels Bundle'} (MEGA Cloud Storage)`,
+                    type: "mega",
+                    mimeType: "application/vnd.mega.cloud-storage",
+                    megaLink: access.megaLink,
+                    size: null
+                });
+            }
         }
     }
 

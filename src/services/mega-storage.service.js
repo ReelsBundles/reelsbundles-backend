@@ -1,7 +1,55 @@
 import { File } from "megajs";
 import mime from "mime-types";
 
-export async function listMegaFolder(megaLink) {
+function matchesFolderId(child, targetId) {
+    if (!child || !targetId) return false;
+    const cleanTarget = String(targetId).trim().toLowerCase();
+    
+    if (child.name && String(child.name).trim().toLowerCase() === cleanTarget) {
+        return true;
+    }
+    
+    if (child.nodeId && String(child.nodeId).trim().toLowerCase() === cleanTarget) {
+        return true;
+    }
+    
+    if (child.downloadId) {
+        const dId = Array.isArray(child.downloadId) ? child.downloadId.join(",") : String(child.downloadId);
+        if (dId.toLowerCase().includes(cleanTarget) || cleanTarget.includes(dId.toLowerCase())) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+function findMegaNode(node, targetId) {
+    if (!node) return null;
+    if (!targetId) return node;
+
+    if (matchesFolderId(node, targetId)) {
+        return node;
+    }
+
+    if (Array.isArray(node.children)) {
+        for (const child of node.children) {
+            const found = findMegaNode(child, targetId);
+            if (found) return found;
+        }
+    }
+
+    return null;
+}
+
+function getItemId(item) {
+    if (item.downloadId) {
+        return Array.isArray(item.downloadId) ? (item.downloadId[1] || item.downloadId[0]) : item.downloadId;
+    }
+    if (item.nodeId) return item.nodeId;
+    return item.name;
+}
+
+export async function listMegaFolder(megaLink, requestedFolderId = null) {
     if (!megaLink) return [];
 
     let cleanLink = String(megaLink).trim();
@@ -10,26 +58,27 @@ export async function listMegaFolder(megaLink) {
     }
 
     try {
-        const file = File.fromURL(cleanLink);
+        const rootFile = File.fromURL(cleanLink);
         
         await new Promise((resolve, reject) => {
-            file.loadAttributes((err, f) => {
+            rootFile.loadAttributes((err, f) => {
                 if (err) return reject(err);
                 resolve(f);
             });
         });
 
+        const targetNode = findMegaNode(rootFile, requestedFolderId) || rootFile;
         const items = [];
 
-        if (Array.isArray(file.children) && file.children.length > 0) {
-            file.children.forEach(child => {
+        if (Array.isArray(targetNode.children) && targetNode.children.length > 0) {
+            targetNode.children.forEach(child => {
                 const isFolder = Boolean(child.directory);
                 const mimeType = isFolder
                     ? "application/vnd.google-apps.folder"
                     : (mime.lookup(child.name) || "video/mp4");
 
                 items.push({
-                    id: child.downloadId || child.nodeId || child.name,
+                    id: getItemId(child),
                     name: child.name || "Untitled",
                     type: isFolder ? "folder" : "file",
                     mimeType,
@@ -38,15 +87,19 @@ export async function listMegaFolder(megaLink) {
                     megaLink: cleanLink
                 });
             });
-        } else if (file.name) {
-            const mimeType = mime.lookup(file.name) || "video/mp4";
+        } else if (targetNode.name && targetNode !== rootFile) {
+            const isFolder = Boolean(targetNode.directory);
+            const mimeType = isFolder
+                ? "application/vnd.google-apps.folder"
+                : (mime.lookup(targetNode.name) || "video/mp4");
+
             items.push({
-                id: file.downloadId || file.nodeId || file.name,
-                name: file.name || "MEGA File",
-                type: "file",
+                id: getItemId(targetNode),
+                name: targetNode.name || "MEGA Item",
+                type: isFolder ? "folder" : "file",
                 mimeType,
-                size: file.size || null,
-                modifiedTime: file.timestamp ? new Date(file.timestamp * 1000).toISOString() : null,
+                size: isFolder ? null : (targetNode.size || null),
+                modifiedTime: targetNode.timestamp ? new Date(targetNode.timestamp * 1000).toISOString() : null,
                 megaLink: cleanLink
             });
         }
