@@ -115,6 +115,7 @@ export async function listDriveFolder(folderId) {
                 mimeType: targetMime || item.mimeType || null,
                 size: item.size ? Number(item.size) : null,
                 modifiedTime: item.modifiedTime || null,
+                folderLink: isFolder ? `https://drive.google.com/drive/folders/${item.id || targetId}` : null,
                 parents: Array.isArray(item.parents) ? item.parents : []
             });
         }

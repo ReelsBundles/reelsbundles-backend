@@ -318,8 +318,17 @@ export async function getUserBundleFiles(user, bundleId, requestedFolderId = nul
         }
     }
 
-    // Fallback Drive item if drive list is empty or service account unavailable, but folderLink is present
-    if (items.length === 0 && access.folderLink && !requestedFolderId) {
+    // Fallback Drive item if drive list is empty or service account unavailable
+    if (items.length === 0 && requestedFolderId) {
+        items.push({
+            id: `drive_${requestedFolderId}`,
+            name: `${access.bundle.name || 'Reels Bundle'} (Google Drive Folder)`,
+            type: "drive",
+            mimeType: "application/vnd.google-apps.folder",
+            folderLink: `https://drive.google.com/drive/folders/${requestedFolderId}`,
+            size: null
+        });
+    } else if (items.length === 0 && access.folderLink && !requestedFolderId) {
         items.push({
             id: `drive_${access.bundle.id}`,
             name: `${access.bundle.name || 'Reels Bundle'} (Google Drive Folder)`,
