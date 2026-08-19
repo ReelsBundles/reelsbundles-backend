@@ -118,27 +118,56 @@ export async function handleGetAdminUsers(req, res) {
                 const snapshot = await db.collection("users").get();
                 if (!snapshot.empty) {
                     const fsUsersMap = new Map();
+                    const fsUsersByEmailMap = new Map();
+
                     snapshot.forEach(doc => {
-                        fsUsersMap.set(doc.id, doc.data());
+                        const data = doc.data() || {};
+                        fsUsersMap.set(doc.id, data);
+                        if (data.email) {
+                            fsUsersByEmailMap.set(String(data.email).trim().toLowerCase(), data);
+                        }
                     });
 
                     users = users.map(u => {
-                        const fsData = fsUsersMap.get(u.id) || fsUsersMap.get(u.uid);
+                        const cleanEmail = u.email ? String(u.email).trim().toLowerCase() : "";
+                        const fsData = fsUsersMap.get(u.id) ||
+                                       fsUsersMap.get(u.uid) ||
+                                       (cleanEmail ? fsUsersByEmailMap.get(cleanEmail) : null);
+
+                        const isLocalSuspended = u.locked === true || u.status === "SUSPENDED" || u.status === "disabled";
+
                         if (fsData) {
                             const isFsSuspended = fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled";
+                            const isSuspended = isFsSuspended || isLocalSuspended;
                             return {
                                 ...u,
-                                locked: isFsSuspended,
-                                status: isFsSuspended ? "SUSPENDED" : (fsData.status || u.status || "active"),
+                                locked: isSuspended,
+                                status: isSuspended ? "SUSPENDED" : (fsData.status || u.status || "active"),
                                 suspensionReason: fsData.suspensionReason || u.suspensionReason || null
                             };
                         }
+
+                        if (isLocalSuspended) {
+                            return {
+                                ...u,
+                                locked: true,
+                                status: "SUSPENDED",
+                                suspensionReason: u.suspensionReason || "Developer tools inspection detected"
+                            };
+                        }
+
                         return u;
                     });
 
                     snapshot.forEach(doc => {
-                        const fsData = doc.data();
-                        const exists = users.some(u => u.id === doc.id || u.uid === doc.id);
+                        const fsData = doc.data() || {};
+                        const cleanFsEmail = fsData.email ? String(fsData.email).trim().toLowerCase() : "";
+                        const exists = users.some(u =>
+                            u.id === doc.id ||
+                            u.uid === doc.id ||
+                            (cleanFsEmail && u.email && String(u.email).trim().toLowerCase() === cleanFsEmail)
+                        );
+
                         if (!exists && fsData.email) {
                             const isFsSuspended = fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled";
                             users.push({

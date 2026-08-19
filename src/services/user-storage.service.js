@@ -142,3 +142,16 @@ export function updateUserSuspension(userId, locked, status, reason) {
         saveUsers(users);
     }
 }
+
+export function updateUserSuspensionByEmail(email, locked, status, reason) {
+    const users = getAllUsers();
+    const cleanEmail = String(email || "").trim().toLowerCase();
+    if (!cleanEmail) return;
+    const user = users.find(u => u.email && u.email.toLowerCase() === cleanEmail);
+    if (user) {
+        user.locked = Boolean(locked);
+        user.status = status;
+        user.suspensionReason = reason || null;
+        saveUsers(users);
+    }
+}
