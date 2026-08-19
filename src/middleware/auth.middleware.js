@@ -139,7 +139,7 @@ export const firebaseUserAuth = async (req, res, next) => {
                 return res.status(403).json({
                     success: false,
                     suspended: true,
-                    message: "Account suspended due to suspicious sharing detection."
+                    message: userData.suspensionReason || "Account suspended due to security violation."
                 });
             }
         }

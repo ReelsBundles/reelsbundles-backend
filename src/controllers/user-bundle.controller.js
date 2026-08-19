@@ -10,6 +10,7 @@ import {
 } from "../services/google-drive-stream.service.js";
 
 import { streamMegaFile } from "../services/mega-storage.service.js";
+import { db } from "../config/firebase.js";
 
 export async function getUserBundles(req, res) {
     try {
@@ -275,6 +276,44 @@ export async function openUserBundleMega(req, res) {
         return res.status(500).json({
             success: false,
             message: "Unable to open MEGA storage."
+        });
+    }
+}
+
+export async function reportDevToolsViolation(req, res) {
+    try {
+        const user = req.user;
+
+        if (!user?.uid) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required."
+            });
+        }
+
+        const userId = user.uid;
+        const reason = "Developer tools inspection detected";
+
+        console.warn(`[SECURITY SUSPENSION] Developer tools inspection detected for user UID: ${userId} (${user.email})`);
+
+        await db.collection("users").doc(userId).set({
+            locked: true,
+            status: "SUSPENDED",
+            suspendedAt: new Date(),
+            suspensionReason: reason,
+            suspendedBy: "SYSTEM_DEVTOOLS_DETECTION"
+        }, { merge: true });
+
+        return res.status(200).json({
+            success: true,
+            suspended: true,
+            message: "Account suspended due to Developer Tools inspection detection."
+        });
+    } catch (error) {
+        console.error("[User Bundle] DevTools report error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to process security violation."
         });
     }
 }

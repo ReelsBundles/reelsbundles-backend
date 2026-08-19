@@ -9,10 +9,18 @@ import {
     listUserBundleFiles,
     downloadUserBundleFile,
     downloadUserBundle,
-    openUserBundleMega
+    openUserBundleMega,
+    reportDevToolsViolation
 } from "../controllers/user-bundle.controller.js";
 
 const router = express.Router();
+
+/* DevTools security report endpoint */
+router.post(
+    "/report-devtools",
+    firebaseUserAuth,
+    reportDevToolsViolation
+);
 
 /* Apply auth middleware to specific bundle endpoints only, so public endpoints under /api/user are not blocked */
 

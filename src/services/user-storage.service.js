@@ -102,7 +102,31 @@ export function toggleUserStatus(userId) {
     const users = getAllUsers();
     const user = users.find(u => u.id === userId || u.uid === userId);
     if (!user) throw new Error("User not found");
-    user.status = user.status === "disabled" ? "active" : "disabled";
+
+    const isSuspended = user.locked === true || user.status === "SUSPENDED" || user.status === "disabled";
+    if (isSuspended) {
+        user.status = "active";
+        user.locked = false;
+        user.suspensionReason = null;
+    } else {
+        user.status = "disabled";
+        user.locked = true;
+        user.suspensionReason = "Manually suspended by Admin";
+    }
+
     saveUsers(users);
+
+    try {
+        import("../config/firebase.js").then(({ db }) => {
+            if (db) {
+                db.collection("users").doc(userId).set({
+                    locked: !isSuspended,
+                    status: isSuspended ? "ACTIVE" : "SUSPENDED",
+                    suspensionReason: isSuspended ? null : "Manually suspended by Admin"
+                }, { merge: true }).catch(() => {});
+            }
+        }).catch(() => {});
+    } catch (e) {}
+
     return user;
 }
