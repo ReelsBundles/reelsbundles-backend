@@ -310,6 +310,24 @@ export async function reportDevToolsViolation(req, res) {
             suspendedBy: "SYSTEM_DEVTOOLS_DETECTION"
         }, { merge: true });
 
+        if (user.email) {
+            const cleanEmail = String(user.email).trim().toLowerCase();
+            const snap = await db.collection("users").where("email", "==", cleanEmail).get().catch(() => null);
+            if (snap && !snap.empty) {
+                const batch = db.batch();
+                snap.docs.forEach(doc => {
+                    batch.set(doc.ref, {
+                        locked: true,
+                        status: "SUSPENDED",
+                        suspendedAt: new Date(),
+                        suspensionReason: reason,
+                        suspendedBy: "SYSTEM_DEVTOOLS_DETECTION"
+                    }, { merge: true });
+                });
+                await batch.commit().catch(() => {});
+            }
+        }
+
         return res.status(200).json({
             success: true,
             suspended: true,

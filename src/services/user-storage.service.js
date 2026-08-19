@@ -124,6 +124,21 @@ export function toggleUserStatus(userId) {
                     status: isSuspended ? "ACTIVE" : "SUSPENDED",
                     suspensionReason: isSuspended ? null : "Manually suspended by Admin"
                 }, { merge: true }).catch(() => {});
+
+                if (user.email) {
+                    const cleanEmail = String(user.email).trim().toLowerCase();
+                    db.collection("users").where("email", "==", cleanEmail).get().then(snap => {
+                        if (!snap.empty) {
+                            snap.docs.forEach(doc => {
+                                doc.ref.set({
+                                    locked: !isSuspended,
+                                    status: isSuspended ? "ACTIVE" : "SUSPENDED",
+                                    suspensionReason: isSuspended ? null : "Manually suspended by Admin"
+                                }, { merge: true }).catch(() => {});
+                            });
+                        }
+                    }).catch(() => {});
+                }
             }
         }).catch(() => {});
     } catch (e) {}
