@@ -9,6 +9,8 @@ import {
     isDriveItemWithinRoot
 } from "../services/google-drive-stream.service.js";
 
+import { streamMegaFile } from "../services/mega-storage.service.js";
+
 export async function getUserBundles(req, res) {
     try {
         const user = req.user;
@@ -142,6 +144,10 @@ export async function downloadUserBundleFile(req, res) {
             });
         }
 
+        if (access.megaLink) {
+            return await streamMegaFile(access.megaLink, fileId, res);
+        }
+
         if (access.folderId) {
             const allowed = await isDriveItemWithinRoot(
                 fileId,
@@ -153,10 +159,6 @@ export async function downloadUserBundleFile(req, res) {
             }
         }
 
-        /*
-         * We intentionally do not return a Drive URL. The server streams
-         * the authorized Drive file directly to the authenticated user.
-         */
         await streamDriveFile(fileId, res);
     } catch (error) {
         console.error("[User Bundle] File download error:", error);

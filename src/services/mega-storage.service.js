@@ -112,3 +112,59 @@ export async function listMegaFolder(megaLink, requestedFolderId = null) {
         return [];
     }
 }
+
+export async function streamMegaFile(megaLink, targetFileId, res, fileName) {
+    if (!megaLink || !targetFileId) {
+        throw new Error("MEGA link and file ID are required.");
+    }
+
+    const cleanLink = String(megaLink).trim();
+    const rootFile = File.fromURL(cleanLink);
+
+    await new Promise((resolve, reject) => {
+        rootFile.loadAttributes((err, f) => {
+            if (err) return reject(err);
+            resolve(f);
+        });
+    });
+
+    function findMegaFile(node, targetId) {
+        const id = Array.isArray(node.downloadId) ? node.downloadId[1] : (node.downloadId || node.id || node.name);
+        if (id === targetId) return node;
+
+        if (Array.isArray(node.children)) {
+            for (const child of node.children) {
+                const found = findMegaFile(child, targetId);
+                if (found) return found;
+            }
+        }
+        return null;
+    }
+
+    const targetNode = findMegaFile(rootFile, targetFileId);
+
+    if (!targetNode) {
+        console.warn(`[Mega Storage] File node ${targetFileId} not found in ${cleanLink}`);
+        return res.redirect(302, cleanLink);
+    }
+
+    const safeName = (fileName || targetNode.name || "download.mp4").replace(/[\\/:*?"<>|]/g, "_");
+    const mimeType = mime.lookup(safeName) || "video/mp4";
+
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
+    res.setHeader("Content-Type", mimeType);
+    if (targetNode.size) {
+        res.setHeader("Content-Length", targetNode.size);
+    }
+
+    const downloadStream = targetNode.download();
+
+    downloadStream.on("error", (err) => {
+        console.error("[Mega Storage] Download stream error:", err.message);
+        if (!res.headersSent) {
+            return res.redirect(302, cleanLink);
+        }
+    });
+
+    downloadStream.pipe(res);
+}
