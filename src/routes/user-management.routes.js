@@ -4,7 +4,8 @@ import {
     handleGetUserStatus,
     handleGetAdminUsers,
     handleDeleteAdminUser,
-    handleToggleAdminUserStatus
+    handleToggleAdminUserStatus,
+    handleDeleteAllAdminUsers
 } from "../controllers/user-management.controller.js";
 
 const router = express.Router();
@@ -16,6 +17,8 @@ router.get("/user/status", handleGetUserStatus);
 
 // Admin user management endpoints
 router.get("/admin/users", handleGetAdminUsers);
+router.delete("/admin/users/all", handleDeleteAllAdminUsers);
+router.delete("/admin/users-all", handleDeleteAllAdminUsers);
 router.delete("/admin/users/:userId", handleDeleteAdminUser);
 router.put("/admin/users/:userId/toggle-status", handleToggleAdminUserStatus);
 

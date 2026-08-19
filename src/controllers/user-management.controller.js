@@ -268,3 +268,19 @@ export function handleToggleAdminUserStatus(req, res) {
         });
     }
 }
+
+export async function handleDeleteAllAdminUsers(req, res) {
+    try {
+        const { deleteAllUsers } = await import("../services/user-storage.service.js");
+        await deleteAllUsers();
+        return res.status(200).json({
+            success: true,
+            message: "All registered users deleted successfully"
+        });
+    } catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: err.message || "Failed to delete all users"
+        });
+    }
+}

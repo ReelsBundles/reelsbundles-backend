@@ -93,8 +93,27 @@ export function deleteUser(userId) {
     let users = getAllUsers();
     const initialLen = users.length;
     users = users.filter(u => u.id !== userId && u.uid !== userId);
-    if (users.length === initialLen) throw new Error("User not found");
     saveUsers(users);
+    return true;
+}
+
+export async function deleteAllUsers() {
+    saveUsers([]);
+    try {
+        const { db } = await import("../config/firebase.js");
+        if (db) {
+            const snapshot = await db.collection("users").get();
+            if (!snapshot.empty) {
+                const batch = db.batch();
+                snapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+            }
+        }
+    } catch (e) {
+        console.warn("[USER STORAGE] Delete all Firestore users notice:", e);
+    }
     return true;
 }
 
