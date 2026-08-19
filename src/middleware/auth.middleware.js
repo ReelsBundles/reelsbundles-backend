@@ -2,6 +2,7 @@ import {
     auth,
     db
 } from "../config/firebase.js";
+import { getUserStatus } from "../services/user-storage.service.js";
 
 const activeSessions = new Map();
 
@@ -132,6 +133,17 @@ export const firebaseUserAuth = async (req, res, next) => {
         const currentUserAgent = req.headers["user-agent"] || "";
 
         const userEmail = decodedUser.email ? String(decodedUser.email).trim().toLowerCase() : "";
+
+        // Check local storage status first
+        const localStatus = getUserStatus(userId, userEmail);
+        if (localStatus && (localStatus.disabled || localStatus.status === "SUSPENDED" || localStatus.user?.locked)) {
+            return res.status(403).json({
+                success: false,
+                suspended: true,
+                message: localStatus.user?.suspensionReason || "Account suspended due to security violation."
+            });
+        }
+
         let isSuspendedInDb = false;
         let dbReason = null;
 
