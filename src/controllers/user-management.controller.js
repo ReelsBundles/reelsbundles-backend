@@ -7,17 +7,41 @@ import {
 } from "../services/user-storage.service.js";
 import { db } from "../config/firebase.js";
 
-export function handleSyncUser(req, res) {
+export async function handleSyncUser(req, res) {
     try {
         const userData = req.body || {};
+        const uid = userData.uid;
+        let isSuspended = false;
+        let suspensionReason = "Account suspended due to security violations.";
+
+        if (uid && db) {
+            try {
+                const fsDoc = await db.collection("users").doc(uid).get();
+                if (fsDoc.exists) {
+                    const fsData = fsDoc.data() || {};
+                    if (fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled") {
+                        isSuspended = true;
+                        suspensionReason = fsData.suspensionReason || suspensionReason;
+                    }
+                }
+            } catch (e) {}
+        }
+
         const synced = syncUser(userData);
 
-        if (synced && synced.status === "disabled") {
+        if (!isSuspended && synced) {
+            if (synced.locked === true || synced.status === "SUSPENDED" || synced.status === "disabled") {
+                isSuspended = true;
+                suspensionReason = synced.suspensionReason || suspensionReason;
+            }
+        }
+
+        if (isSuspended) {
             return res.status(403).json({
                 success: false,
                 disabled: true,
-                status: "disabled",
-                message: "Your account has been disabled by the admin. Please contact support."
+                status: "SUSPENDED",
+                message: suspensionReason
             });
         }
 
@@ -35,19 +59,42 @@ export function handleSyncUser(req, res) {
     }
 }
 
-export function handleGetUserStatus(req, res) {
+export async function handleGetUserStatus(req, res) {
     try {
         const uid = req.query.uid || req.user?.uid;
         const email = req.query.email || req.user?.email;
+
+        let isSuspended = false;
+        let suspensionReason = "Account suspended due to security violations.";
+
+        if (uid && db) {
+            try {
+                const fsDoc = await db.collection("users").doc(uid).get();
+                if (fsDoc.exists) {
+                    const fsData = fsDoc.data() || {};
+                    if (fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled") {
+                        isSuspended = true;
+                        suspensionReason = fsData.suspensionReason || suspensionReason;
+                    }
+                }
+            } catch (e) {}
+        }
+
         const result = getUserStatus(uid, email);
-        if (result.disabled) {
+        if (!isSuspended && (result.disabled || result.status === "SUSPENDED" || result.user?.locked)) {
+            isSuspended = true;
+            suspensionReason = result.user?.suspensionReason || suspensionReason;
+        }
+
+        if (isSuspended) {
             return res.status(403).json({
                 success: false,
                 disabled: true,
-                status: "disabled",
-                message: "Your account has been disabled by the admin. Please contact support."
+                status: "SUSPENDED",
+                message: suspensionReason
             });
         }
+
         return res.status(200).json({
             success: true,
             status: result.status || "active",
