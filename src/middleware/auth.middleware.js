@@ -131,17 +131,41 @@ export const firebaseUserAuth = async (req, res, next) => {
         const currentIp = req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "";
         const currentUserAgent = req.headers["user-agent"] || "";
 
-        // Check if user is already suspended in Firestore database
-        const userDoc = await db.collection("users").doc(userId).get();
-        if (userDoc.exists) {
-            const userData = userDoc.data() || {};
-            if (userData.locked === true || userData.status === "SUSPENDED") {
-                return res.status(403).json({
-                    success: false,
-                    suspended: true,
-                    message: userData.suspensionReason || "Account suspended due to security violation."
-                });
+        const userEmail = decodedUser.email ? String(decodedUser.email).trim().toLowerCase() : "";
+        let isSuspendedInDb = false;
+        let dbReason = null;
+
+        if (userId) {
+            const userDoc = await db.collection("users").doc(userId).get();
+            if (userDoc.exists) {
+                const userData = userDoc.data() || {};
+                if (userData.locked === true || userData.status === "SUSPENDED" || userData.status === "disabled") {
+                    isSuspendedInDb = true;
+                    dbReason = userData.suspensionReason;
+                }
             }
+        }
+
+        if (!isSuspendedInDb && userEmail) {
+            const snap = await db.collection("users").where("email", "==", userEmail).get();
+            if (!snap.empty) {
+                for (const doc of snap.docs) {
+                    const data = doc.data() || {};
+                    if (data.locked === true || data.status === "SUSPENDED" || data.status === "disabled") {
+                        isSuspendedInDb = true;
+                        dbReason = data.suspensionReason;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (isSuspendedInDb) {
+            return res.status(403).json({
+                success: false,
+                suspended: true,
+                message: dbReason || "Account suspended due to security violation."
+            });
         }
 
         const now = Date.now();

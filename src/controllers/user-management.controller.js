@@ -11,17 +11,33 @@ export async function handleSyncUser(req, res) {
     try {
         const userData = req.body || {};
         const uid = userData.uid;
+        const email = userData.email ? String(userData.email).trim().toLowerCase() : "";
         let isSuspended = false;
         let suspensionReason = "Account suspended due to security violations.";
 
-        if (uid && db) {
+        if (db) {
             try {
-                const fsDoc = await db.collection("users").doc(uid).get();
-                if (fsDoc.exists) {
-                    const fsData = fsDoc.data() || {};
-                    if (fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled") {
-                        isSuspended = true;
-                        suspensionReason = fsData.suspensionReason || suspensionReason;
+                if (uid) {
+                    const fsDoc = await db.collection("users").doc(uid).get();
+                    if (fsDoc.exists) {
+                        const fsData = fsDoc.data() || {};
+                        if (fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled") {
+                            isSuspended = true;
+                            suspensionReason = fsData.suspensionReason || suspensionReason;
+                        }
+                    }
+                }
+                if (!isSuspended && email) {
+                    const snap = await db.collection("users").where("email", "==", email).get();
+                    if (!snap.empty) {
+                        for (const doc of snap.docs) {
+                            const fsData = doc.data() || {};
+                            if (fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled") {
+                                isSuspended = true;
+                                suspensionReason = fsData.suspensionReason || suspensionReason;
+                                break;
+                            }
+                        }
                     }
                 }
             } catch (e) {}
@@ -62,19 +78,35 @@ export async function handleSyncUser(req, res) {
 export async function handleGetUserStatus(req, res) {
     try {
         const uid = req.query.uid || req.user?.uid;
-        const email = req.query.email || req.user?.email;
+        const rawEmail = req.query.email || req.user?.email;
+        const email = rawEmail ? String(rawEmail).trim().toLowerCase() : "";
 
         let isSuspended = false;
         let suspensionReason = "Account suspended due to security violations.";
 
-        if (uid && db) {
+        if (db) {
             try {
-                const fsDoc = await db.collection("users").doc(uid).get();
-                if (fsDoc.exists) {
-                    const fsData = fsDoc.data() || {};
-                    if (fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled") {
-                        isSuspended = true;
-                        suspensionReason = fsData.suspensionReason || suspensionReason;
+                if (uid) {
+                    const fsDoc = await db.collection("users").doc(uid).get();
+                    if (fsDoc.exists) {
+                        const fsData = fsDoc.data() || {};
+                        if (fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled") {
+                            isSuspended = true;
+                            suspensionReason = fsData.suspensionReason || suspensionReason;
+                        }
+                    }
+                }
+                if (!isSuspended && email) {
+                    const snap = await db.collection("users").where("email", "==", email).get();
+                    if (!snap.empty) {
+                        for (const doc of snap.docs) {
+                            const fsData = doc.data() || {};
+                            if (fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled") {
+                                isSuspended = true;
+                                suspensionReason = fsData.suspensionReason || suspensionReason;
+                                break;
+                            }
+                        }
                     }
                 }
             } catch (e) {}
