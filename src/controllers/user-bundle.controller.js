@@ -283,23 +283,26 @@ export async function openUserBundleMega(req, res) {
 
 export async function reportDevToolsViolation(req, res) {
     try {
-        const user = req.user;
+        const user = req.user || req.body || {};
+        const userId = user.uid || req.body?.uid;
+        const email = user.email || req.body?.email;
 
-        if (!user?.uid) {
+        if (!userId && !email) {
             return res.status(401).json({
                 success: false,
                 message: "Authentication required."
             });
         }
 
-        const userId = user.uid;
-        const reason = "Developer tools inspection detected";
+        const reason = req.body?.reason || "Developer tools inspection detected";
 
-        console.warn(`[SECURITY SUSPENSION] Developer tools inspection detected for user UID: ${userId} (${user.email})`);
+        console.warn(`[SECURITY SUSPENSION] Developer tools inspection detected for user UID: ${userId || 'N/A'} (${email || 'N/A'})`);
 
-        updateUserSuspension(userId, true, "SUSPENDED", reason);
-        if (user.email) {
-            updateUserSuspensionByEmail(user.email, true, "SUSPENDED", reason);
+        if (userId) {
+            updateUserSuspension(userId, true, "SUSPENDED", reason);
+        }
+        if (email) {
+            updateUserSuspensionByEmail(email, true, "SUSPENDED", reason);
         }
 
         await db.collection("users").doc(userId).set({
