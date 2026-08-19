@@ -1,14 +1,15 @@
-import express from "express";
-
-
 import {
     downloadBundle,
     getBundleInfo
 } from "../controllers/download.controller.js";
+import { createAdminDownloadLog } from "../controllers/admin-download.controller.js";
 
+const router = express.Router();
 
-const router =
-    express.Router();
+router.post(
+    "/log",
+    createAdminDownloadLog
+);
 
 
 /* ==========================================================
