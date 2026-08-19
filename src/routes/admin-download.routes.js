@@ -4,7 +4,8 @@ import express from "express";
 import {
     getAdminDownloads,
     deleteAdminDownload,
-    deleteAllAdminDownloads
+    deleteAllAdminDownloads,
+    createAdminDownloadLog
 } from "../controllers/admin-download.controller.js";
 
 

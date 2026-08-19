@@ -190,3 +190,13 @@ export const deleteAllAdminDownloads = async (req, res) => {
         return res.status(400).json({ success: false, message: err.message });
     }
 };
+
+export const createAdminDownloadLog = async (req, res) => {
+    try {
+        const { saveDownloadLog } = await import("../services/download-log.service.js");
+        await saveDownloadLog(req.body || {});
+        return res.status(200).json({ success: true, message: "Download log recorded successfully" });
+    } catch (err) {
+        return res.status(400).json({ success: false, message: err.message });
+    }
+};
