@@ -445,6 +445,11 @@ app.use(
     adminDownloadRoutes
 );
 
+app.use(
+    "/api/downloads",
+    adminDownloadRoutes
+);
+
 /* ----------------------------------------------------------
    COUPONS & DEMO VIDEOS
 ---------------------------------------------------------- */
