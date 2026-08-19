@@ -18,7 +18,6 @@ const router = express.Router();
 /* DevTools security report endpoint */
 router.post(
     "/report-devtools",
-    firebaseUserAuth,
     reportDevToolsViolation
 );
 
