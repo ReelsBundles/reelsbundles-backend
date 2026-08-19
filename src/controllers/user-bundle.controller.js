@@ -262,6 +262,11 @@ export async function openUserBundleMega(req, res) {
             targetUrl = "https://" + targetUrl;
         }
 
+        const fileId = req.query.fileId ? String(req.query.fileId).trim() : null;
+        if (fileId) {
+            targetUrl += `/file/${encodeURIComponent(fileId)}`;
+        }
+
         return res.redirect(302, targetUrl);
     } catch (error) {
         console.error("[User Bundle] MEGA open error:", error);
