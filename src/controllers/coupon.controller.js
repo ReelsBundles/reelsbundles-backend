@@ -13,7 +13,7 @@ export const applyCoupon = async (req, res) => {
     try {
         const { code, planKey } = req.body;
         if (!code) {
-            return res.status(400).json({
+            return res.status(200).json({
                 success: false,
                 message: "Coupon code is required."
             });
@@ -21,21 +21,21 @@ export const applyCoupon = async (req, res) => {
 
         const coupon = getCouponByCode(code);
         if (!coupon || !coupon.active) {
-            return res.status(404).json({
+            return res.status(200).json({
                 success: false,
                 message: "Invalid or expired coupon code."
             });
         }
 
         if (coupon.maxUses && coupon.usageCount >= coupon.maxUses) {
-            return res.status(400).json({
+            return res.status(200).json({
                 success: false,
                 message: "This coupon code usage limit has been reached."
             });
         }
 
         if (coupon.expiryDate && new Date(coupon.expiryDate) < new Date()) {
-            return res.status(400).json({
+            return res.status(200).json({
                 success: false,
                 message: "This coupon code has expired."
             });
@@ -45,7 +45,7 @@ export const applyCoupon = async (req, res) => {
         const originalPrice = selectedPlan ? selectedPlan.amount : 49;
 
         if (coupon.minOrderAmount && originalPrice < coupon.minOrderAmount) {
-            return res.status(400).json({
+            return res.status(200).json({
                 success: false,
                 message: `Minimum order amount of ₹${coupon.minOrderAmount} required for this coupon.`
             });
