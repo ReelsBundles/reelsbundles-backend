@@ -5,6 +5,7 @@ import {
     toggleUserStatus,
     getUserStatus
 } from "../services/user-storage.service.js";
+import { db } from "../config/firebase.js";
 
 export function handleSyncUser(req, res) {
     try {
@@ -61,9 +62,59 @@ export function handleGetUserStatus(req, res) {
     }
 }
 
-export function handleGetAdminUsers(req, res) {
+export async function handleGetAdminUsers(req, res) {
     try {
-        const users = getAllUsers();
+        let users = getAllUsers();
+
+        try {
+            if (db) {
+                const snapshot = await db.collection("users").get();
+                if (!snapshot.empty) {
+                    const fsUsersMap = new Map();
+                    snapshot.forEach(doc => {
+                        fsUsersMap.set(doc.id, doc.data());
+                    });
+
+                    users = users.map(u => {
+                        const fsData = fsUsersMap.get(u.id) || fsUsersMap.get(u.uid);
+                        if (fsData) {
+                            const isFsSuspended = fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled";
+                            return {
+                                ...u,
+                                locked: isFsSuspended,
+                                status: isFsSuspended ? "SUSPENDED" : (fsData.status || u.status || "active"),
+                                suspensionReason: fsData.suspensionReason || u.suspensionReason || null
+                            };
+                        }
+                        return u;
+                    });
+
+                    snapshot.forEach(doc => {
+                        const fsData = doc.data();
+                        const exists = users.some(u => u.id === doc.id || u.uid === doc.id);
+                        if (!exists && fsData.email) {
+                            const isFsSuspended = fsData.locked === true || fsData.status === "SUSPENDED" || fsData.status === "disabled";
+                            users.push({
+                                id: doc.id,
+                                uid: doc.id,
+                                email: fsData.email,
+                                displayName: fsData.displayName || fsData.email.split('@')[0],
+                                photoURL: fsData.photoURL || null,
+                                providerId: fsData.providerId || "google.com",
+                                plan: fsData.plan || "free",
+                                locked: isFsSuspended,
+                                status: isFsSuspended ? "SUSPENDED" : (fsData.status || "active"),
+                                suspensionReason: fsData.suspensionReason || null,
+                                createdAt: fsData.createdAt || new Date().toISOString()
+                            });
+                        }
+                    });
+                }
+            }
+        } catch (fsErr) {
+            console.warn("[ADMIN USERS] Firestore merge warning:", fsErr);
+        }
+
         return res.status(200).json({
             success: true,
             count: users.length,

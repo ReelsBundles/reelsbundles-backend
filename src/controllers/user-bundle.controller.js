@@ -11,6 +11,7 @@ import {
 
 import { streamMegaFile } from "../services/mega-storage.service.js";
 import { db } from "../config/firebase.js";
+import { updateUserSuspension } from "../services/user-storage.service.js";
 
 export async function getUserBundles(req, res) {
     try {
@@ -295,6 +296,8 @@ export async function reportDevToolsViolation(req, res) {
         const reason = "Developer tools inspection detected";
 
         console.warn(`[SECURITY SUSPENSION] Developer tools inspection detected for user UID: ${userId} (${user.email})`);
+
+        updateUserSuspension(userId, true, "SUSPENDED", reason);
 
         await db.collection("users").doc(userId).set({
             locked: true,

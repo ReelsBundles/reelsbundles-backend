@@ -130,3 +130,15 @@ export function toggleUserStatus(userId) {
 
     return user;
 }
+
+export function updateUserSuspension(userId, locked, status, reason) {
+    const users = getAllUsers();
+    const cleanId = String(userId || "").trim();
+    const user = users.find(u => u.id === cleanId || u.uid === cleanId);
+    if (user) {
+        user.locked = Boolean(locked);
+        user.status = status;
+        user.suspensionReason = reason || null;
+        saveUsers(users);
+    }
+}
