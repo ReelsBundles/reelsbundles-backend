@@ -5,6 +5,12 @@ import {
     toggleUserStatus,
     getUserStatus
 } from "../services/user-storage.service.js";
+import {
+    suspendUser,
+    unsuspendUser,
+    isUserSuspended,
+    getSuspensionRecord
+} from "../services/suspension-storage.service.js";
 import { db } from "../config/firebase.js";
 
 export async function handleSyncUser(req, res) {
@@ -12,8 +18,8 @@ export async function handleSyncUser(req, res) {
         const userData = req.body || {};
         const uid = userData.uid;
         const email = userData.email ? String(userData.email).trim().toLowerCase() : "";
-        let isSuspended = false;
-        let suspensionReason = "Account suspended due to security violations.";
+        let isSuspended = isUserSuspended(uid) || isUserSuspended(email);
+        let suspensionReason = isSuspended ? (getSuspensionRecord(email || uid)?.reason || "Account suspended due to security violations.") : "Account suspended due to security violations.";
 
         if (db) {
             try {
@@ -81,8 +87,8 @@ export async function handleGetUserStatus(req, res) {
         const rawEmail = req.query.email || req.user?.email;
         const email = rawEmail ? String(rawEmail).trim().toLowerCase() : "";
 
-        let isSuspended = false;
-        let suspensionReason = "Account suspended due to security violations.";
+        let isSuspended = isUserSuspended(uid) || isUserSuspended(email);
+        let suspensionReason = isSuspended ? (getSuspensionRecord(email || uid)?.reason || "Account suspended due to security violations.") : "Account suspended due to security violations.";
 
         if (db) {
             try {
@@ -256,6 +262,14 @@ export function handleToggleAdminUserStatus(req, res) {
     try {
         const userId = req.params.userId;
         const updatedUser = toggleUserStatus(userId);
+
+        if (updatedUser.status === "SUSPENDED" || updatedUser.locked) {
+            suspendUser({ uid: userId, email: updatedUser.email, reason: "Account suspended by Super Administrator." });
+        } else {
+            unsuspendUser(userId);
+            if (updatedUser.email) unsuspendUser(updatedUser.email);
+        }
+
         return res.status(200).json({
             success: true,
             message: `User status changed to ${updatedUser.status}`,
