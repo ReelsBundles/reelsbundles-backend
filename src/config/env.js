@@ -124,6 +124,13 @@ const FRONTEND_URL =
     );
 
 
+const BACKEND_URL =
+    getEnv(
+        "BACKEND_URL",
+        "https://reelsbundles-backend.onrender.com"
+    );
+
+
 /* ==========================================================
    ALLOWED ORIGINS
 ========================================================== */
@@ -166,6 +173,9 @@ const env = {
 
 
     FRONTEND_URL,
+
+
+    BACKEND_URL,
 
 
     ALLOWED_ORIGINS,

@@ -188,7 +188,7 @@ export async function createCashfreeOrder(
                     `${env.FRONTEND_URL}/success.html?order_id={order_id}`,
 
                 notify_url:
-                    `${env.FRONTEND_URL}/api/payment/webhook`
+                    `${env.BACKEND_URL || env.FRONTEND_URL}/api/webhook/cashfree`
 
             }
 
