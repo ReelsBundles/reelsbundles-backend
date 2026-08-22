@@ -20,6 +20,7 @@ import secureDownloadRoutes
 import couponRoutes from "./routes/coupon.routes.js";
 import demoVideoRoutes from "./routes/demo-video.routes.js";
 import userManagementRoutes from "./routes/user-management.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
 
 import "./config/env.js";
 import { SYSTEM_VERSION } from "./config/version.js";
@@ -499,6 +500,11 @@ app.use(
 app.use(
     "/api",
     userManagementRoutes
+);
+
+app.use(
+    "/api",
+    notificationRoutes
 );
 
 
