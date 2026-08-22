@@ -19,7 +19,6 @@ import secureDownloadRoutes
     from "./routes/secure-download.routes.js";
 import couponRoutes from "./routes/coupon.routes.js";
 import demoVideoRoutes from "./routes/demo-video.routes.js";
-import protectionRoutes from "./routes/protection.routes.js";
 import userManagementRoutes from "./routes/user-management.routes.js";
 
 import "./config/env.js";
@@ -495,11 +494,6 @@ app.use(
 app.use(
     "/api/secure-download",
     secureDownloadRoutes
-);
-
-app.use(
-    "/api",
-    protectionRoutes
 );
 
 app.use(
