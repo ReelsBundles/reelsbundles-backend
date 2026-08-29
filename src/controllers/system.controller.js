@@ -44,6 +44,16 @@ function saveSettingsLocal(settings) {
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf-8");
 }
 
+function parseSafeDate(val) {
+    if (!val) return null;
+    try {
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d.toISOString();
+    } catch (e) {
+        return null;
+    }
+}
+
 export const getMaintenanceStatus = async (req, res) => {
     try {
         let settings = loadSettingsLocal();
@@ -91,7 +101,7 @@ export const updateMaintenanceStatus = async (req, res) => {
             ...current,
             maintenance: maintenance !== undefined ? Boolean(maintenance) : current.maintenance,
             message: message !== undefined ? String(message).trim() : current.message,
-            expectedBack: expectedBack !== undefined ? (expectedBack ? new Date(expectedBack).toISOString() : null) : current.expectedBack,
+            expectedBack: expectedBack !== undefined ? parseSafeDate(expectedBack) : current.expectedBack,
             showTimer: showTimer !== undefined ? Boolean(showTimer) : current.showTimer,
             updatedAt: new Date().toISOString()
         };
