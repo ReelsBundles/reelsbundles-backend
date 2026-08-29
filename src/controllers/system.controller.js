@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { db } from "../config/firebase.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,7 +24,7 @@ function ensureSettingsFile() {
     }
 }
 
-function loadSettings() {
+function loadSettingsLocal() {
     ensureSettingsFile();
     try {
         const raw = fs.readFileSync(SETTINGS_FILE, "utf-8");
@@ -31,21 +32,40 @@ function loadSettings() {
     } catch (e) {
         return {
             maintenance: false,
-            message: "🛠️ System Maintenance",
+            message: "🛠️ System Maintenance in progress.",
             expectedBack: null,
             showTimer: true
         };
     }
 }
 
-function saveSettings(settings) {
+function saveSettingsLocal(settings) {
     ensureSettingsFile();
     fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf-8");
 }
 
-export const getMaintenanceStatus = (req, res) => {
+export const getMaintenanceStatus = async (req, res) => {
     try {
-        const settings = loadSettings();
+        let settings = loadSettingsLocal();
+
+        // Sync with cloud Firestore to prevent Render restart/reset wiping maintenance mode
+        try {
+            if (db) {
+                const docRef = db.collection("system_settings").doc("maintenance");
+                const docSnap = await docRef.get();
+                if (docSnap.exists) {
+                    const remoteData = docSnap.data();
+                    settings = {
+                        ...settings,
+                        ...remoteData
+                    };
+                    saveSettingsLocal(settings);
+                }
+            }
+        } catch (e) {
+            console.warn("[SYSTEM CONTROLLER] Firestore sync warning:", e?.message);
+        }
+
         return res.json({
             success: true,
             maintenance: Boolean(settings.maintenance),
@@ -62,9 +82,9 @@ export const getMaintenanceStatus = (req, res) => {
     }
 };
 
-export const updateMaintenanceStatus = (req, res) => {
+export const updateMaintenanceStatus = async (req, res) => {
     try {
-        const current = loadSettings();
+        const current = loadSettingsLocal();
         const { maintenance, message, expectedBack, showTimer } = req.body;
 
         const updated = {
@@ -76,7 +96,17 @@ export const updateMaintenanceStatus = (req, res) => {
             updatedAt: new Date().toISOString()
         };
 
-        saveSettings(updated);
+        // Save locally
+        saveSettingsLocal(updated);
+
+        // Save to Firestore Cloud Database so it NEVER resets on Render server restart
+        try {
+            if (db) {
+                await db.collection("system_settings").doc("maintenance").set(updated, { merge: true });
+            }
+        } catch (e) {
+            console.warn("[SYSTEM CONTROLLER] Firestore write warning:", e?.message);
+        }
 
         return res.json({
             success: true,
