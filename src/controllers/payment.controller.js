@@ -347,7 +347,12 @@ export const createOrder = async (
         );
 
 
-        return res.status(500).json({
+        const statusCode =
+            error.statusCode ||
+            error.status ||
+            400;
+
+        return res.status(statusCode).json({
 
             success: false,
 

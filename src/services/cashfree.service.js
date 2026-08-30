@@ -312,12 +312,12 @@ export async function createCashfreeOrder(
                 `Cashfree API error (${response.status})`;
 
             if (String(message).toLowerCase().includes("authentication failed") || response.status === 401) {
-                message = "Payment Gateway Credentials Error: Invalid CASHFREE_CLIENT_ID or CASHFREE_CLIENT_SECRET in backend environment settings.";
+                message = "Payment Gateway Credentials Error: The CASHFREE_CLIENT_ID or CASHFREE_CLIENT_SECRET configured in Render environment variables is invalid or belongs to Sandbox while CASHFREE_ENV=PRODUCTION. Please update your Live Production API keys in Render Settings.";
             }
 
-            throw new Error(
-                message
-            );
+            const err = new Error(message);
+            err.statusCode = response.status;
+            throw err;
 
         }
 
