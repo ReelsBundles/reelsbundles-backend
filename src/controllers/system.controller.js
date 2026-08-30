@@ -18,6 +18,8 @@ function ensureSettingsFile() {
             message: "🛠️ ReelsBundles is currently undergoing scheduled system upgrades. We will be back online shortly!",
             expectedBack: null,
             showTimer: true,
+            testerPasscode: "5796",
+            bypassKey: "RB_TESTER_KEY_5796",
             updatedAt: new Date().toISOString()
         };
         fs.writeFileSync(SETTINGS_FILE, JSON.stringify(initial, null, 2), "utf-8");
@@ -34,7 +36,9 @@ function loadSettingsLocal() {
             maintenance: false,
             message: "🛠️ System Maintenance in progress.",
             expectedBack: null,
-            showTimer: true
+            showTimer: true,
+            testerPasscode: "5796",
+            bypassKey: "RB_TESTER_KEY_5796"
         };
     }
 }
@@ -81,7 +85,9 @@ export const getMaintenanceStatus = async (req, res) => {
             maintenance: Boolean(settings.maintenance),
             message: settings.message || "🛠️ System Maintenance in progress.",
             expectedBack: settings.expectedBack || null,
-            showTimer: settings.showTimer !== false
+            showTimer: settings.showTimer !== false,
+            testerPasscode: settings.testerPasscode || "5796",
+            bypassKey: settings.bypassKey || "RB_TESTER_KEY_5796"
         });
     } catch (err) {
         return res.status(500).json({
@@ -95,7 +101,7 @@ export const getMaintenanceStatus = async (req, res) => {
 export const updateMaintenanceStatus = async (req, res) => {
     try {
         const current = loadSettingsLocal();
-        const { maintenance, message, expectedBack, showTimer } = req.body;
+        const { maintenance, message, expectedBack, showTimer, testerPasscode, bypassKey } = req.body;
 
         const updated = {
             ...current,
@@ -103,6 +109,8 @@ export const updateMaintenanceStatus = async (req, res) => {
             message: message !== undefined ? String(message).trim() : current.message,
             expectedBack: expectedBack !== undefined ? parseSafeDate(expectedBack) : current.expectedBack,
             showTimer: showTimer !== undefined ? Boolean(showTimer) : current.showTimer,
+            testerPasscode: testerPasscode !== undefined ? String(testerPasscode).trim() : (current.testerPasscode || "5796"),
+            bypassKey: bypassKey !== undefined ? String(bypassKey).trim() : (current.bypassKey || `RB_TESTER_KEY_${Date.now()}`),
             updatedAt: new Date().toISOString()
         };
 
