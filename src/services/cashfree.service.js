@@ -139,9 +139,47 @@ export async function createCashfreeOrder(
             "reelsbundles.support@gmail.com";
 
 
-        const customerPhone =
+        const rawPhone =
             order.customer_phone ||
-            "9999999999";
+            "";
+
+        let phoneDigits =
+            String(rawPhone)
+                .replace(/[^\d]/g, "");
+
+        if (
+            phoneDigits.length === 12 &&
+            phoneDigits.startsWith("91")
+        ) {
+
+            phoneDigits =
+                phoneDigits.slice(2);
+
+        }
+
+        if (
+            phoneDigits.length === 11 &&
+            phoneDigits.startsWith("0")
+        ) {
+
+            phoneDigits =
+                phoneDigits.slice(1);
+
+        }
+
+        if (
+            phoneDigits.length > 10
+        ) {
+
+            phoneDigits =
+                phoneDigits.slice(-10);
+
+        }
+
+        const customerPhone =
+            phoneDigits.length === 10
+                ? phoneDigits
+                : "9999999999";
 
 
         /* --------------------------------------------------
