@@ -184,6 +184,11 @@ export const createOrder = async (
 
                 success: true,
 
+                environment:
+                    process.env.CASHFREE_ENV === "PRODUCTION"
+                        ? "production"
+                        : "sandbox",
+
                 order,
 
                 payment
@@ -311,6 +316,11 @@ export const createOrder = async (
         return res.json({
 
             success: true,
+
+            environment:
+                process.env.CASHFREE_ENV === "PRODUCTION"
+                    ? "production"
+                    : "sandbox",
 
             order,
 
