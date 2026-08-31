@@ -85,8 +85,8 @@ export const createOrder = async (req, res) => {
         order.order_amount = finalAmount;
         order.customer_id = `user_${req.user.uid.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40)}`;
         order.customer_name = fullName ? String(fullName).replace(/[^a-zA-Z0-9\s._-]/g, "").trim().slice(0, 50) || "Customer" : "Customer";
-        order.customer_email = req.user.email || "";
-        order.customer_phone = phone || "";
+        order.customer_email = req.user.email || req.body?.email || "customer@reelsbundles.com";
+        order.customer_phone = phone || req.body?.phone || "9999999999";
 
         /* --------------------------------------------------
            CHECK EXISTING PAYMENT (IDEMPOTENCY)

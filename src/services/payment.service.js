@@ -35,15 +35,12 @@ const PLANS = {
 ========================================================== */
 
 export function getPlan(plan) {
-
-    if (!PLANS[plan]) {
-
-        return null;
-
-    }
-
-    return PLANS[plan];
-
+    if (!plan) return PLANS.basic;
+    const cleanKey = String(plan).toLowerCase().trim();
+    if (PLANS[cleanKey]) return PLANS[cleanKey];
+    if (cleanKey.includes("premium")) return PLANS.premium;
+    if (cleanKey.includes("basic")) return PLANS.basic;
+    return PLANS.basic;
 }
 
 
