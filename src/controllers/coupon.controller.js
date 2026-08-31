@@ -8,10 +8,11 @@ import {
 } from '../services/coupon-storage.service.js';
 
 import { getPlan } from '../services/payment.service.js';
+import { db } from '../config/firebase.js';
 
 export const applyCoupon = async (req, res) => {
     try {
-        const { code, planKey } = req.body;
+        const { code, planKey, userEmail, userId } = req.body || {};
         if (!code) {
             return res.status(200).json({
                 success: false,
@@ -39,6 +40,47 @@ export const applyCoupon = async (req, res) => {
                 success: false,
                 message: "This coupon code has expired."
             });
+        }
+
+        // Check Bidirectional User Eligibility (New Users vs Existing Users)
+        const targetType = (coupon.eligibleUserType || 'all').toLowerCase();
+        if (targetType !== 'all') {
+            let isExistingUser = false;
+            try {
+                if (userEmail || userId) {
+                    const snap = await db.collection("payments").get();
+                    snap.forEach(doc => {
+                        const data = doc.data() || {};
+                        const status = String(data.paymentStatus || data.status || "").toUpperCase();
+                        if (status === "PAID" || status === "SUCCESS" || status === "COMPLETED") {
+                            if (userEmail && String(data.customerEmail || data.email || "").toLowerCase() === String(userEmail).toLowerCase()) {
+                                isExistingUser = true;
+                            }
+                            if (userId && String(data.userId || data.customerPhone || "").toLowerCase() === String(userId).toLowerCase()) {
+                                isExistingUser = true;
+                            }
+                        }
+                    });
+                }
+            } catch (e) {
+                console.warn("[COUPON ELIGIBILITY CHECK WARN]", e.message);
+            }
+
+            // Rule A: Existing User attempting to apply a New Users Only coupon
+            if (targetType === 'new_users' && isExistingUser) {
+                return res.status(200).json({
+                    success: false,
+                    message: "⚠️ This coupon code is valid for New Users on their first purchase only."
+                });
+            }
+
+            // Rule B: New User attempting to apply a Returning Users Only coupon
+            if ((targetType === 'existing_users' || targetType === 'premium') && !isExistingUser) {
+                return res.status(200).json({
+                    success: false,
+                    message: "⚠️ This coupon code is valid for Returning Users on repeat purchases only."
+                });
+            }
         }
 
         const selectedPlan = getPlan(planKey || 'basic');
