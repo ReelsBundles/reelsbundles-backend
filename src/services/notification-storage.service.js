@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { db } from "../config/firebase.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,10 +11,10 @@ function ensureDirectoryExistence(filePath) {
     const dirname = path.dirname(filePath);
     if (fs.existsSync(dirname)) return true;
     ensureDirectoryExistence(dirname);
-    fs.mkdirSync(dirname);
+    fs.mkdirSync(dirname, { recursive: true });
 }
 
-function loadNotifications() {
+export function loadNotifications() {
     try {
         if (!fs.existsSync(DATA_FILE)) {
             ensureDirectoryExistence(DATA_FILE);
@@ -28,7 +29,7 @@ function loadNotifications() {
     }
 }
 
-function saveNotifications(notifications) {
+export function saveNotifications(notifications) {
     try {
         ensureDirectoryExistence(DATA_FILE);
         fs.writeFileSync(DATA_FILE, JSON.stringify(notifications, null, 2), "utf-8");
@@ -37,6 +38,32 @@ function saveNotifications(notifications) {
         console.error("[NOTIFICATION STORAGE] Save Error:", error);
         return false;
     }
+}
+
+export async function fetchNotificationsAsync() {
+    let items = loadNotifications();
+    try {
+        if (db) {
+            const snapshot = await db.collection("notifications").get();
+            if (!snapshot.empty) {
+                const remote = [];
+                snapshot.forEach(doc => remote.push({ id: doc.id, ...doc.data() }));
+
+                remote.forEach(rItem => {
+                    const idx = items.findIndex(lItem => lItem.id === rItem.id);
+                    if (idx === -1) {
+                        items.push(rItem);
+                    } else {
+                        items[idx] = { ...items[idx], ...rItem };
+                    }
+                });
+                saveNotifications(items);
+            }
+        }
+    } catch (e) {
+        console.warn("[NOTIFICATIONS] Firestore sync warning:", e?.message);
+    }
+    return items;
 }
 
 export function getActiveNotifications() {
@@ -48,14 +75,14 @@ export function getAllNotifications() {
     return loadNotifications();
 }
 
-export function createNotification(data) {
+export async function createNotification(data) {
     const list = loadNotifications();
     const newId = "notif_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
     const newNotif = {
         id: newId,
         title: data.title || "Notification",
         message: data.message || "",
-        type: data.type || "announcement", // coupon, announcement, alert
+        type: data.type || "announcement",
         couponCode: data.couponCode ? String(data.couponCode).trim().toUpperCase() : "",
         targetAudience: data.targetAudience || "all",
         active: data.active !== false,
@@ -63,10 +90,19 @@ export function createNotification(data) {
     };
     list.unshift(newNotif);
     saveNotifications(list);
+
+    try {
+        if (db) {
+            await db.collection("notifications").doc(newNotif.id).set(newNotif);
+        }
+    } catch (e) {
+        console.warn("[NOTIFICATION] Firestore write warning:", e?.message);
+    }
+
     return newNotif;
 }
 
-export function updateNotification(id, data) {
+export async function updateNotification(id, data) {
     const list = loadNotifications();
     const index = list.findIndex(n => n.id === id);
     if (index === -1) return null;
@@ -83,14 +119,32 @@ export function updateNotification(id, data) {
     };
 
     saveNotifications(list);
+
+    try {
+        if (db) {
+            await db.collection("notifications").doc(id).set(list[index], { merge: true });
+        }
+    } catch (e) {
+        console.warn("[NOTIFICATION] Firestore update warning:", e?.message);
+    }
+
     return list[index];
 }
 
-export function deleteNotification(id) {
+export async function deleteNotification(id) {
     let list = loadNotifications();
     const initialLen = list.length;
     list = list.filter(n => n.id !== id);
     if (list.length === initialLen) return false;
     saveNotifications(list);
+
+    try {
+        if (db) {
+            await db.collection("notifications").doc(id).delete();
+        }
+    } catch (e) {
+        console.warn("[NOTIFICATION] Firestore delete warning:", e?.message);
+    }
+
     return true;
 }

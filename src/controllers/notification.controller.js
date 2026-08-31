@@ -1,14 +1,16 @@
 import {
     getActiveNotifications,
     getAllNotifications,
+    fetchNotificationsAsync,
     createNotification,
     updateNotification,
     deleteNotification
 } from "../services/notification-storage.service.js";
 
 // Public: Get active notifications for users
-export function handleGetPublicNotifications(req, res) {
+export async function handleGetPublicNotifications(req, res) {
     try {
+        await fetchNotificationsAsync();
         const notifications = getActiveNotifications();
         return res.status(200).json({
             success: true,
@@ -24,8 +26,9 @@ export function handleGetPublicNotifications(req, res) {
 }
 
 // Admin: Get all notifications
-export function handleGetAdminNotifications(req, res) {
+export async function handleGetAdminNotifications(req, res) {
     try {
+        await fetchNotificationsAsync();
         const notifications = getAllNotifications();
         return res.status(200).json({
             success: true,
@@ -41,7 +44,7 @@ export function handleGetAdminNotifications(req, res) {
 }
 
 // Admin: Create notification
-export function handleCreateAdminNotification(req, res) {
+export async function handleCreateAdminNotification(req, res) {
     try {
         const data = req.body || {};
         if (!data.title || !data.message) {
@@ -50,7 +53,7 @@ export function handleCreateAdminNotification(req, res) {
                 message: "Notification title and message are required."
             });
         }
-        const created = createNotification(data);
+        const created = await createNotification(data);
         return res.status(201).json({
             success: true,
             message: "Notification created successfully",
@@ -65,11 +68,11 @@ export function handleCreateAdminNotification(req, res) {
 }
 
 // Admin: Update notification
-export function handleUpdateAdminNotification(req, res) {
+export async function handleUpdateAdminNotification(req, res) {
     try {
         const { id } = req.params;
         const data = req.body || {};
-        const updated = updateNotification(id, data);
+        const updated = await updateNotification(id, data);
         if (!updated) {
             return res.status(404).json({
                 success: false,
@@ -90,10 +93,10 @@ export function handleUpdateAdminNotification(req, res) {
 }
 
 // Admin: Delete notification
-export function handleDeleteAdminNotification(req, res) {
+export async function handleDeleteAdminNotification(req, res) {
     try {
         const { id } = req.params;
-        const success = deleteNotification(id);
+        const success = await deleteNotification(id);
         if (!success) {
             return res.status(404).json({
                 success: false,
