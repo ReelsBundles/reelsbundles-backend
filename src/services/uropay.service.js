@@ -122,10 +122,15 @@ export async function createUroPayOrder(orderData) {
         throw new Error(`UroPay API Key or Secret is missing in environment (Checked: UROPAY_TEST_API_KEY, UROPAY_API_KEY, UROPAY_TEST_KEY).`);
     }
 
+    const targetAmount = Number(orderData.amount);
+    if (!Number.isFinite(targetAmount) || targetAmount <= 0) {
+        throw new Error(`Invalid payment order amount: expected finite positive number, received ${orderData.amount}`);
+    }
+
     const path = "/v1/orders";
     const bodyObj = {
         tenantOrderRef: String(orderData.tenantOrderRef || orderData.orderId),
-        amount: Number(orderData.amount),
+        amount: targetAmount,
         currency: orderData.currency || "INR"
     };
 

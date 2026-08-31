@@ -49,7 +49,7 @@ export const createOrder = async (req, res) => {
             });
         }
 
-        let baseAmount = selectedPlan.price;
+        let baseAmount = Number(selectedPlan.amount || selectedPlan.price || 49);
         let finalAmount = baseAmount;
         let appliedCoupon = null;
 
@@ -62,12 +62,20 @@ export const createOrder = async (req, res) => {
                 const notExceeded = !coupon.maxUses || (coupon.usedCount || 0) < coupon.maxUses;
 
                 if (notExpired && notExceeded) {
-                    if (coupon.discountType === "percentage") {
-                        const discount = Math.round((baseAmount * coupon.discountValue) / 100);
-                        finalAmount = Math.max(1, baseAmount - discount);
-                    } else if (coupon.discountType === "fixed") {
-                        finalAmount = Math.max(1, baseAmount - coupon.discountValue);
+                    let discount = 0;
+                    const discountType = String(coupon.discountType || "").toLowerCase();
+                    const discountVal = Number(coupon.discountValue || 0);
+
+                    if (discountType === "percentage") {
+                        discount = Math.round((baseAmount * discountVal) / 100);
+                        if (coupon.maxDiscount && discount > Number(coupon.maxDiscount)) {
+                            discount = Number(coupon.maxDiscount);
+                        }
+                    } else if (discountType === "flat" || discountType === "fixed") {
+                        discount = discountVal;
                     }
+
+                    finalAmount = Math.max(1, baseAmount - discount);
                     appliedCoupon = coupon;
                 }
             }
