@@ -132,6 +132,7 @@ export async function updateNotification(id, data) {
 }
 
 export async function deleteNotification(id) {
+    await fetchNotificationsAsync();
     let list = loadNotifications();
     const initialLen = list.length;
     list = list.filter(n => n.id !== id);
