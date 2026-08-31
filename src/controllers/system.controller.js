@@ -144,3 +144,29 @@ export const updateMaintenanceStatus = async (req, res) => {
         });
     }
 };
+
+export const verifyMaintenancePin = async (req, res) => {
+    try {
+        let settings = loadSettingsLocal();
+        try {
+            if (db) {
+                const docRef = db.collection("system_settings").doc("maintenance");
+                const docSnap = await docRef.get();
+                if (docSnap.exists) {
+                    settings = { ...settings, ...docSnap.data() };
+                }
+            }
+        } catch (e) {}
+
+        const activePin = String(settings.testerPasscode || "5796").trim();
+        const activeKey = String(settings.bypassKey || `RB_TESTER_KEY_${activePin}`).trim();
+        const inputPin = String(req.body?.pin || "").trim();
+
+        if (inputPin && (inputPin === activePin || inputPin === activeKey || inputPin === `RB_TESTER_KEY_${activePin}`)) {
+            return res.json({ success: true, valid: true, passcode: activePin });
+        }
+        return res.json({ success: true, valid: false });
+    } catch (err) {
+        return res.status(500).json({ success: false, valid: false });
+    }
+};
