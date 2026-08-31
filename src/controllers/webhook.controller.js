@@ -39,12 +39,12 @@ export const uropayWebhook = async (req, res) => {
         if (orderRef) {
             const storedPayment = await getPayment(orderRef);
             if (storedPayment) {
-                if (uropayStatus === "PAID") {
+                if (["PAID", "SUCCESS", "COMPLETED", "CAPTURED"].includes(uropayStatus)) {
                     await updatePayment(orderRef, {
                         paymentStatus: "PAID",
                         uropayOrderId: event.orderId || storedPayment.uropayOrderId || null,
                         webhookEventId: event.eventId || null,
-                        amount: event.amount_captured || storedPayment.amount,
+                        amount: event.amount_captured || event.amount || storedPayment.amount,
                         paidAt: storedPayment.paidAt || new Date(),
                         updatedAt: new Date()
                     });

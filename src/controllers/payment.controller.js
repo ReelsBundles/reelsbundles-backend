@@ -233,24 +233,31 @@ export const verifyOrder = async (req, res) => {
         let uropayStatus = storedPayment.paymentStatus;
         let uropayPayment = null;
 
-        // If not already verified locally, fetch authoritative status from UroPay
-        if (storedPayment.paymentStatus !== "PAID") {
+        const currentStatusUpper = String(uropayStatus || "").toUpperCase().trim();
+        const isAlreadyPaid = ["PAID", "SUCCESS", "COMPLETED", "CAPTURED"].includes(currentStatusUpper);
+
+        // If not already verified locally, fetch authoritative status from UroPay API
+        if (!isAlreadyPaid) {
             const targetUroPayId = storedPayment.uropayOrderId || orderId;
-            console.log("[Payment] Checking UroPay API for order:", targetUroPayId);
+            console.log("[Payment Verification] Checking UroPay API for order:", targetUroPayId);
 
             try {
                 uropayPayment = await verifyUroPayOrder(targetUroPayId);
                 uropayStatus = uropayPayment?.status || storedPayment.paymentStatus;
             } catch (err) {
-                console.warn("[Payment] Error querying UroPay API, falling back to local state:", err.message);
+                console.warn("[Payment Verification] Error querying UroPay API, falling back to stored status:", err.message);
             }
         }
 
-        if (String(uropayStatus).toUpperCase() !== "PAID") {
-            return res.status(403).json({
+        const finalStatusUpper = String(uropayStatus || "").toUpperCase().trim();
+        const isPaid = ["PAID", "SUCCESS", "COMPLETED", "CAPTURED"].includes(finalStatusUpper);
+
+        if (!isPaid) {
+            console.log("[Payment Verification] Order not paid. Status:", uropayStatus);
+            return res.status(200).json({
                 success: false,
-                message: "Payment not completed.",
-                orderStatus: uropayStatus || null
+                message: `Payment status is ${uropayStatus || "PENDING"}. Payment incomplete.`,
+                orderStatus: uropayStatus || "PENDING"
             });
         }
 
