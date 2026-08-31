@@ -173,7 +173,7 @@ app.use(
 );
 
 app.use((req, res, next) => {
-    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
     next();
 });
 
