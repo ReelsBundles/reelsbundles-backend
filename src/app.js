@@ -112,11 +112,10 @@ app.use(
                     "https://www.youtube.com",
                     "https://www.youtube-nocookie.com",
 
-                    "https://*.cashfree.com",
-
                     "https://accounts.google.com",
                     "https://*.google.com",
-                    "https://*.firebaseapp.com"
+                    "https://*.firebaseapp.com",
+                    "https://*.uropai.in"
                 ],
 
 
@@ -125,8 +124,7 @@ app.use(
 
                     "https://www.youtube.com",
                     "https://www.youtube-nocookie.com",
-
-                    "https://*.cashfree.com"
+                    "https://*.uropai.in"
                 ],
 
 
@@ -164,7 +162,7 @@ app.use(
 
                 formAction: [
                     "'self'",
-                    "https://*.cashfree.com"
+                    "https://*.uropai.in"
                 ]
 
             }

@@ -4,9 +4,10 @@ import {
 } from "../services/payment.service.js";
 
 import {
-    createCashfreeOrder,
-    verifyCashfreeOrder
-} from "../services/cashfree.service.js";
+    createUroPayOrder,
+    verifyUroPayOrder,
+    getUroPayCredentials
+} from "../services/uropay.service.js";
 
 import {
     savePayment,
@@ -20,670 +21,280 @@ import {
     getTokenExpiry
 } from "../utils/token.js";
 
-
 import {
     getCouponByCode,
     fetchCouponsAsync,
     incrementCouponUsage
 } from "../services/coupon-storage.service.js";
 
-
 /* ==========================================================
    CREATE PAYMENT ORDER
 ========================================================== */
-
-export const createOrder = async (
-    req,
-    res
-) => {
-
+export const createOrder = async (req, res) => {
     try {
-
-        const {
-            plan,
-            fullName,
-            phone,
-            couponCode
-        } = req.body;
-
-
-        /* --------------------------------------------------
-           AUTHENTICATED USER REQUIRED
-        -------------------------------------------------- */
+        const { plan, fullName, phone, couponCode } = req.body;
 
         if (!req.user?.uid) {
-
             return res.status(401).json({
-
                 success: false,
-
-                message:
-                    "Authentication required."
-
+                message: "Authentication required."
             });
-
         }
 
-
-        /* --------------------------------------------------
-           VALIDATE PLAN
-        -------------------------------------------------- */
-
-        const selectedPlan =
-            getPlan(plan);
-
-
+        const selectedPlan = getPlan(plan);
         if (!selectedPlan) {
-
             return res.status(400).json({
-
                 success: false,
-
-                message:
-                    "Invalid Plan."
-
+                message: "Invalid plan selected."
             });
-
         }
 
-
-        /* --------------------------------------------------
-           GENERATE INTERNAL ORDER & APPLY COUPON
-        -------------------------------------------------- */
-
-        const order =
-            generateOrder(
-                selectedPlan
-            );
+        let baseAmount = selectedPlan.price;
+        let finalAmount = baseAmount;
+        let appliedCoupon = null;
 
         if (couponCode) {
             await fetchCouponsAsync();
             const coupon = getCouponByCode(couponCode);
-            if (coupon && coupon.active && (!coupon.expiryDate || new Date(coupon.expiryDate) >= new Date())) {
-                let discount = 0;
-                if (coupon.discountType === 'percentage') {
-                    discount = Math.round((selectedPlan.amount * coupon.discountValue) / 100);
-                    if (coupon.maxDiscount && discount > coupon.maxDiscount) discount = coupon.maxDiscount;
-                } else if (coupon.discountType === 'flat') {
-                    discount = coupon.discountValue;
+            if (coupon && coupon.active !== false) {
+                const now = new Date();
+                const notExpired = !coupon.expiryDate || new Date(coupon.expiryDate) > now;
+                const notExceeded = !coupon.maxUses || (coupon.usedCount || 0) < coupon.maxUses;
+
+                if (notExpired && notExceeded) {
+                    if (coupon.discountType === "percentage") {
+                        const discount = Math.round((baseAmount * coupon.discountValue) / 100);
+                        finalAmount = Math.max(1, baseAmount - discount);
+                    } else if (coupon.discountType === "fixed") {
+                        finalAmount = Math.max(1, baseAmount - coupon.discountValue);
+                    }
+                    appliedCoupon = coupon;
                 }
-                order.order_amount = Math.max(1, selectedPlan.amount - discount);
-                await incrementCouponUsage(coupon.code);
             }
         }
 
-
-        /*
-         * NEVER trust frontend identity.
-         */
-
-        order.customer_id =
-            req.user.uid;
-
-
-        order.customer_name =
-            req.user.name ||
-            fullName ||
-            "ReelsBundles Customer";
-
-
-        order.customer_email =
-            req.user.email ||
-            "";
-
-
-        order.customer_phone =
-            phone ||
-            "";
-
+        const order = generateOrder(selectedPlan);
+        order.order_amount = finalAmount;
+        order.customer_id = `user_${req.user.uid.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40)}`;
+        order.customer_name = fullName ? String(fullName).replace(/[^a-zA-Z0-9\s._-]/g, "").trim().slice(0, 50) || "Customer" : "Customer";
+        order.customer_email = req.user.email || "";
+        order.customer_phone = phone || "";
 
         /* --------------------------------------------------
-           CREATE CASHFREE ORDER
+           CHECK EXISTING PAYMENT (IDEMPOTENCY)
         -------------------------------------------------- */
-
-        const payment =
-            await createCashfreeOrder(
-                order
-            );
-
-
-        /* --------------------------------------------------
-           CHECK EXISTING PAYMENT
-        -------------------------------------------------- */
-
-        const existingPayment =
-            await getPayment(
-                payment.order_id
-            );
-
-
+        const existingPayment = await getPayment(order.order_id);
         if (existingPayment) {
-
-            /*
-             * Do not allow another user
-             * to reuse this order.
-             */
-
-            if (
-                existingPayment.userUid &&
-                existingPayment.userUid !==
-                    req.user.uid
-            ) {
-
+            if (existingPayment.userUid && existingPayment.userUid !== req.user.uid) {
                 return res.status(403).json({
-
                     success: false,
-
-                    message:
-                        "Payment order belongs to another user."
-
+                    message: "Payment order belongs to another user."
                 });
-
             }
 
-
+            const { env } = getUroPayCredentials();
             return res.json({
-
                 success: true,
-
-                environment:
-                    process.env.CASHFREE_ENV === "PRODUCTION"
-                        ? "production"
-                        : "sandbox",
-
+                environment: env.toLowerCase(),
+                openUrl: existingPayment.openUrl || undefined,
                 order,
-
-                payment
-
+                payment: {
+                    id: existingPayment.uropayOrderId || existingPayment.orderId,
+                    tenantOrderRef: existingPayment.orderId,
+                    status: existingPayment.paymentStatus,
+                    openUrl: existingPayment.openUrl
+                }
             });
-
         }
 
-
         /* --------------------------------------------------
-           SECURE DOWNLOAD TOKEN
+           CREATE UROPAY ORDER
         -------------------------------------------------- */
+        const frontendBaseUrl = process.env.FRONTEND_URL || "https://reelsbundles.github.io";
+        const backendBaseUrl = process.env.BACKEND_URL || "https://reelsbundles-backend.onrender.com";
 
-        const downloadToken =
-            generateDownloadToken();
+        const uropayOrder = await createUroPayOrder({
+            tenantOrderRef: order.order_id,
+            amount: order.order_amount,
+            currency: order.order_currency || "INR",
+            customerEmail: order.customer_email,
+            customerPhone: order.customer_phone,
+            returnUrl: `${frontendBaseUrl}/success.html?order_id=${encodeURIComponent(order.order_id)}`,
+            webhookUrl: `${backendBaseUrl}/api/webhook/uropay`
+        });
 
+        if (appliedCoupon) {
+            await incrementCouponUsage(appliedCoupon.code);
+        }
 
-        const downloadTokenHash =
-            hashDownloadToken(
-                downloadToken
-            );
-
-
-        const expiresAt =
-            getTokenExpiry(
-                10
-            );
-
-
-        /* --------------------------------------------------
-           SAVE PAYMENT
-        -------------------------------------------------- */
+        const downloadToken = generateDownloadToken();
+        const downloadTokenHash = hashDownloadToken(downloadToken);
+        const expiresAt = getTokenExpiry(10);
 
         await savePayment({
-
-            orderId:
-                payment.order_id,
-
-            cfOrderId:
-                payment.cf_order_id ||
-                null,
-
-            amount:
-                payment.order_amount,
-
-            currency:
-                payment.order_currency ||
-                "INR",
-
-            paymentStatus:
-                payment.order_status ||
-                "ACTIVE",
-
-
-            /*
-             * CRITICAL:
-             * Firebase UID ownership.
-             */
-
-            userUid:
-                req.user.uid,
-
-
-            /*
-             * CRITICAL:
-             * Purchased plan.
-             */
-
-            bundlePlan:
-                selectedPlan.id,
-
-
-            customerName:
-                payment
-                    .customer_details
-                    ?.customer_name ||
-                order.customer_name ||
-                "",
-
-
-            customerEmail:
-                payment
-                    .customer_details
-                    ?.customer_email ||
-                order.customer_email ||
-                "",
-
-
-            customerPhone:
-                payment
-                    .customer_details
-                    ?.customer_phone ||
-                order.customer_phone ||
-                "",
-
-
+            orderId: order.order_id,
+            gateway: "UROPAY",
+            uropayOrderId: uropayOrder.id || null,
+            tenantOrderRef: order.order_id,
+            amount: order.order_amount,
+            currency: order.order_currency || "INR",
+            paymentStatus: uropayOrder.status || "PENDING",
+            openUrl: uropayOrder.openUrl || null,
+            userUid: req.user.uid,
+            bundlePlan: selectedPlan.id,
+            customerName: order.customer_name || "",
+            customerEmail: order.customer_email || "",
+            customerPhone: order.customer_phone || "",
             downloadTokenHash,
-
-
-            downloadCount:
-                0,
-
-
-            maxDownloads:
-                1,
-
-
-            downloadLock:
-                false,
-
-
+            downloadCount: 0,
+            maxDownloads: 1,
+            downloadLock: false,
             expiresAt,
-
-
-            createdAt:
-                new Date()
-
+            createdAt: new Date()
         });
 
-
-        /* --------------------------------------------------
-           RESPONSE
-        -------------------------------------------------- */
+        const { env } = getUroPayCredentials();
 
         return res.json({
-
             success: true,
-
-            environment:
-                process.env.CASHFREE_ENV === "PRODUCTION"
-                    ? "production"
-                    : "sandbox",
-
+            environment: env.toLowerCase(),
+            openUrl: uropayOrder.openUrl,
             order,
-
-            payment,
-
+            payment: {
+                id: uropayOrder.id,
+                tenantOrderRef: uropayOrder.tenantOrderRef || order.order_id,
+                status: uropayOrder.status || "PENDING",
+                openUrl: uropayOrder.openUrl,
+                payment_session_id: uropayOrder.openUrl
+            },
             download: {
-
-                token:
-                    downloadToken,
-
+                token: downloadToken,
                 expiresAt
-
             }
-
         });
-
-    }
-
-    catch (error) {
-
-        console.error(
-            "CREATE ORDER ERROR:",
-            error
-        );
-
-
-        const statusCode =
-            error.statusCode ||
-            error.status ||
-            400;
-
+    } catch (error) {
+        console.error("CREATE ORDER ERROR:", error);
+        const statusCode = error.statusCode || error.status || 400;
         return res.status(statusCode).json({
-
             success: false,
-
-            message:
-                error.message ||
-                "Unable to create payment order."
-
+            message: error.message || "Unable to create payment order."
         });
-
     }
-
 };
-
 
 /* ==========================================================
    VERIFY PAYMENT
 ========================================================== */
-
-export const verifyOrder = async (
-    req,
-    res
-) => {
-
+export const verifyOrder = async (req, res) => {
     try {
-
-        /* --------------------------------------------------
-           AUTH REQUIRED
-        -------------------------------------------------- */
-
         if (!req.user?.uid) {
-
             return res.status(401).json({
                 success: false,
-                message:
-                    "Authentication required."
+                message: "Authentication required."
             });
-
         }
 
-
-        /* --------------------------------------------------
-           ORDER ID
-        -------------------------------------------------- */
-
-        const {
-            orderId
-        } = req.params;
-
-
+        const { orderId } = req.params;
         if (!orderId) {
-
             return res.status(400).json({
                 success: false,
-                message:
-                    "Order ID is required."
+                message: "Order ID is required."
             });
-
         }
 
-
-        console.log(
-            "[Payment] Verifying order:",
-            orderId
-        );
-
-
-        /* --------------------------------------------------
-           FIND LOCAL PAYMENT
-        -------------------------------------------------- */
-
-        const storedPayment =
-            await getPayment(
-                orderId
-            );
-
+        console.log("[Payment] Verifying order:", orderId);
+        const storedPayment = await getPayment(orderId);
 
         if (!storedPayment) {
-
             return res.status(404).json({
                 success: false,
-                message:
-                    "Payment order not found."
+                message: "Payment order not found."
             });
-
         }
 
-
-        /* --------------------------------------------------
-           OWNERSHIP CHECK
-        -------------------------------------------------- */
-
-        if (
-            storedPayment.userUid !==
-            req.user.uid
-        ) {
-
+        if (storedPayment.userUid !== req.user.uid) {
             return res.status(403).json({
                 success: false,
-                message:
-                    "You are not allowed to verify this payment order."
+                message: "You are not allowed to verify this payment order."
             });
-
         }
 
-
         /* --------------------------------------------------
-           VERIFY WITH CASHFREE
+           VERIFY WITH UROPAY API
         -------------------------------------------------- */
+        let uropayStatus = storedPayment.paymentStatus;
+        let uropayPayment = null;
 
-        console.log(
-            "[Payment] Checking Cashfree:",
-            orderId
-        );
+        // If not already verified locally, fetch authoritative status from UroPay
+        if (storedPayment.paymentStatus !== "PAID") {
+            const targetUroPayId = storedPayment.uropayOrderId || orderId;
+            console.log("[Payment] Checking UroPay API for order:", targetUroPayId);
 
-
-        const payment =
-            await verifyCashfreeOrder(
-                orderId
-            );
-
-
-        console.log(
-            "[Payment] Cashfree status:",
-            payment?.order_status
-        );
-
-
-        /* --------------------------------------------------
-           PAYMENT MUST BE PAID
-        -------------------------------------------------- */
-
-        if (
-            String(
-                payment?.order_status ||
-                ""
-            ).toUpperCase() !==
-            "PAID"
-        ) {
-
-            return res.status(403).json({
-                success: false,
-                message:
-                    "Payment not completed.",
-                orderStatus:
-                    payment?.order_status ||
-                    null
-            });
-
-        }
-
-
-        /* --------------------------------------------------
-           FRESH DOWNLOAD TOKEN
-        -------------------------------------------------- */
-
-        const downloadToken =
-            generateDownloadToken();
-
-
-        const downloadTokenHash =
-            hashDownloadToken(
-                downloadToken
-            );
-
-
-        /* --------------------------------------------------
-           TOKEN EXPIRY
-           10 MINUTES
-        -------------------------------------------------- */
-
-        const expiresAt =
-            getTokenExpiry(
-                10
-            );
-
-
-        /* --------------------------------------------------
-           PURCHASED PLAN
-        -------------------------------------------------- */
-
-        const bundlePlan =
-            storedPayment.bundlePlan ||
-            storedPayment.bundle_plan ||
-            "basic";
-
-
-        /* --------------------------------------------------
-           UPDATE VERIFIED PAYMENT
-        -------------------------------------------------- */
-
-        await updatePayment(
-            orderId,
-            {
-
-                paymentStatus:
-                    "PAID",
-
-                cfOrderId:
-                    payment.cf_order_id ||
-                    storedPayment.cfOrderId ||
-                    null,
-
-                amount:
-                    payment.order_amount ||
-                    storedPayment.amount,
-
-                currency:
-                    payment.order_currency ||
-                    storedPayment.currency ||
-                    "INR",
-
-                userUid:
-                    storedPayment.userUid,
-
-                bundlePlan,
-
-                downloadTokenHash,
-
-                downloadCount:
-                    0,
-
-                maxDownloads:
-                    storedPayment.maxDownloads ||
-                    1,
-
-                downloadLock:
-                    false,
-
-                expiresAt,
-
-                paidAt:
-                    new Date(),
-
-                updatedAt:
-                    new Date()
-
+            try {
+                uropayPayment = await verifyUroPayOrder(targetUroPayId);
+                uropayStatus = uropayPayment?.status || storedPayment.paymentStatus;
+            } catch (err) {
+                console.warn("[Payment] Error querying UroPay API, falling back to local state:", err.message);
             }
-        );
+        }
 
+        if (String(uropayStatus).toUpperCase() !== "PAID") {
+            return res.status(403).json({
+                success: false,
+                message: "Payment not completed.",
+                orderStatus: uropayStatus || null
+            });
+        }
 
-        /* --------------------------------------------------
-           SUCCESS RESPONSE
-        -------------------------------------------------- */
+        const downloadToken = generateDownloadToken();
+        const downloadTokenHash = hashDownloadToken(downloadToken);
+        const expiresAt = getTokenExpiry(10);
+        const bundlePlan = storedPayment.bundlePlan || storedPayment.bundle_plan || "basic";
 
-        console.log(
-            "[Payment] Payment verified successfully:",
-            orderId
-        );
+        await updatePayment(orderId, {
+            paymentStatus: "PAID",
+            uropayOrderId: uropayPayment?.id || storedPayment.uropayOrderId || null,
+            amount: uropayPayment?.amount || storedPayment.amount,
+            currency: uropayPayment?.currency || storedPayment.currency || "INR",
+            userUid: storedPayment.userUid,
+            bundlePlan,
+            downloadTokenHash,
+            downloadCount: 0,
+            maxDownloads: storedPayment.maxDownloads || 1,
+            downloadLock: false,
+            expiresAt,
+            paidAt: storedPayment.paidAt || new Date(),
+            updatedAt: new Date()
+        });
 
-        console.log(
-            "[Payment] Download token created:",
-            Boolean(downloadToken)
-        );
+        console.log("[Payment] Payment verified successfully:", orderId);
 
-        console.log(
-            "[Payment] Download expiry:",
-            expiresAt
-        );
-
+        const currentAmount = uropayPayment?.amount || storedPayment.amount || 49;
 
         return res.json({
-
             success: true,
-
             payment: {
-
-                order_id:
-                    payment.order_id,
-
-                order_amount:
-                    payment.order_amount,
-
-                order_currency:
-                    payment.order_currency,
-
-                order_status:
-                    payment.order_status
-
+                order_id: orderId,
+                order_amount: currentAmount,
+                order_currency: storedPayment.currency || "INR",
+                order_status: "PAID"
             },
-
             order: {
-
-                order_id:
-                    payment.order_id,
-
-                order_amount:
-                    payment.order_amount,
-
-                order_status:
-                    payment.order_status,
-
-                order_note:
-                    payment.order_note
-
+                order_id: orderId,
+                order_amount: currentAmount,
+                order_status: "PAID",
+                order_note: "ReelsBundles Purchase"
             },
-
             download: {
-
-                token:
-                    downloadToken,
-
+                token: downloadToken,
                 expiresAt
-
             }
-
         });
-
-    }
-
-    catch (
-        error
-    ) {
-
-        console.error(
-            "[Payment] VERIFY ORDER ERROR:",
-            error
-        );
-
-
+    } catch (error) {
+        console.error("[Payment] VERIFY ORDER ERROR:", error);
         return res.status(500).json({
-
             success: false,
-
-            message:
-                error?.message ||
-                "Payment verification failed."
-
+            message: error?.message || "Payment verification failed."
         });
-
     }
-
 };

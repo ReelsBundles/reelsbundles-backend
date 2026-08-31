@@ -182,25 +182,37 @@ const env = {
 
 
     /* ------------------------------------------------------
-       CASHFREE
+       UROPAY API
     ------------------------------------------------------ */
 
-    CASHFREE_CLIENT_ID:
+    UROPAY_ENV:
         getEnv(
-            "CASHFREE_CLIENT_ID"
+            "UROPAY_ENV",
+            "TEST"
         ),
 
 
-    CASHFREE_CLIENT_SECRET:
+    UROPAY_TEST_API_KEY:
         getEnv(
-            "CASHFREE_CLIENT_SECRET"
+            "UROPAY_TEST_API_KEY"
         ),
 
 
-    CASHFREE_ENV:
+    UROPAY_TEST_API_SECRET:
         getEnv(
-            "CASHFREE_ENV",
-            "sandbox"
+            "UROPAY_TEST_API_SECRET"
+        ),
+
+
+    UROPAY_PRODUCTION_API_KEY:
+        getEnv(
+            "UROPAY_PRODUCTION_API_KEY"
+        ),
+
+
+    UROPAY_PRODUCTION_API_SECRET:
+        getEnv(
+            "UROPAY_PRODUCTION_API_SECRET"
         ),
 
 

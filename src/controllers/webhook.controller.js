@@ -1,64 +1,75 @@
-import crypto from "crypto";
-import { updatePayment } from "../services/payment-storage.service.js";
+import { updatePayment, getPayment } from "../services/payment-storage.service.js";
+import { verifyUroPayWebhookSignature } from "../services/uropay.service.js";
 
-export const cashfreeWebhook = async (req, res) => {
+const processedEvents = new Set();
+
+export const uropayWebhook = async (req, res) => {
     try {
-        const signature = req.headers["x-webhook-signature"];
-        const timestamp = req.headers["x-webhook-timestamp"];
-
-        if (!signature || !timestamp) {
-            console.error("[Webhook] Missing Cashfree webhook signature or timestamp headers.");
-            return res.status(400).json({
-                success: false,
-                message: "Missing signature/timestamp headers."
-            });
-        }
-
-        const secretKey = process.env.CASHFREE_CLIENT_SECRET;
-        if (!secretKey) {
-            console.error("[Webhook] CASHFREE_CLIENT_SECRET is missing in environment variables.");
-            return res.status(500).json({
-                success: false,
-                message: "Webhook configuration error."
-            });
-        }
-
-        // Calculate expected signature using rawBody
         const rawBody = req.rawBody || "";
-        const dataToSign = timestamp + rawBody;
-        const expectedSignature = crypto
-            .createHmac("sha256", secretKey)
-            .update(dataToSign)
-            .digest("base64");
 
-        if (signature !== expectedSignature) {
-            console.warn("[Webhook] Invalid Cashfree signature detected. Rejecting event.");
+        // Verify HMAC-SHA256 signature using official UroPay algorithm
+        const isSignatureValid = verifyUroPayWebhookSignature(req.headers, rawBody);
+        if (!isSignatureValid) {
+            console.warn("[Webhook] Invalid UroPay webhook signature detected. Rejecting event.");
             return res.status(400).json({
                 success: false,
                 message: "Invalid webhook signature."
             });
         }
 
-        const event = req.body;
-        console.log("[Webhook] Valid Cashfree signature verified. Processing event:", event?.type);
+        const event = req.body || {};
+        console.log("[Webhook] Valid UroPay webhook signature verified. Processing event:", event?.eventId, "| Status:", event?.status);
 
-        if (event?.type === "PAYMENT_SUCCESS_WEBHOOK" && event?.data?.order?.order_id) {
-            await updatePayment(
-                event.data.order.order_id,
-                {
-                    paymentStatus: "PAID",
-                    updatedAt: new Date()
+        // Idempotency: Prevent duplicate delivery processing
+        if (event?.eventId) {
+            if (processedEvents.has(event.eventId)) {
+                console.log(`[Webhook] Duplicate eventId '${event.eventId}' safely acknowledged.`);
+                return res.status(200).json({ success: true, message: "Duplicate event acknowledged." });
+            }
+            processedEvents.add(event.eventId);
+            if (processedEvents.size > 1000) {
+                const firstItem = processedEvents.values().next().value;
+                processedEvents.delete(firstItem);
+            }
+        }
+
+        const orderRef = event?.tenantOrderRef || event?.orderId;
+        const uropayStatus = String(event?.status || "").toUpperCase();
+
+        if (orderRef) {
+            const storedPayment = await getPayment(orderRef);
+            if (storedPayment) {
+                if (uropayStatus === "PAID") {
+                    await updatePayment(orderRef, {
+                        paymentStatus: "PAID",
+                        uropayOrderId: event.orderId || storedPayment.uropayOrderId || null,
+                        webhookEventId: event.eventId || null,
+                        amount: event.amount_captured || storedPayment.amount,
+                        paidAt: storedPayment.paidAt || new Date(),
+                        updatedAt: new Date()
+                    });
+                    console.log(`[Webhook] Payment order '${orderRef}' updated to PAID via UroPay webhook.`);
+                } else if (["FAILED", "EXPIRED", "CANCELLED"].includes(uropayStatus)) {
+                    await updatePayment(orderRef, {
+                        paymentStatus: uropayStatus,
+                        webhookEventId: event.eventId || null,
+                        updatedAt: new Date()
+                    });
+                    console.log(`[Webhook] Payment order '${orderRef}' status updated to ${uropayStatus}.`);
                 }
-            );
+            }
         }
 
         return res.status(200).json({
             success: true
         });
     } catch (error) {
-        console.error("[Webhook] Error processing Cashfree webhook:", error);
+        console.error("[Webhook] Error processing UroPay webhook:", error);
         return res.status(500).json({
-            success: false
+            success: false,
+            message: "Webhook processing error."
         });
     }
 };
+
+export const cashfreeWebhook = uropayWebhook;
