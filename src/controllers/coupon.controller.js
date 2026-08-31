@@ -178,7 +178,7 @@ export const getActiveCoupons = async (req, res) => {
 
 export const createCoupon = async (req, res) => {
     try {
-        const newCoupon = createCouponService(req.body);
+        const newCoupon = await createCouponService(req.body);
         return res.json({
             success: true,
             message: "Coupon created successfully!",
@@ -194,7 +194,7 @@ export const createCoupon = async (req, res) => {
 
 export const toggleCoupon = async (req, res) => {
     try {
-        const updated = toggleCouponService(req.params.id);
+        const updated = await toggleCouponService(req.params.id);
         return res.json({
             success: true,
             message: `Coupon is now ${updated.active ? 'Active' : 'Inactive'}`,
@@ -210,10 +210,10 @@ export const toggleCoupon = async (req, res) => {
 
 export const deleteCoupon = async (req, res) => {
     try {
-        deleteCouponService(req.params.id);
+        await deleteCouponService(req.params.id);
         return res.json({
             success: true,
-            message: "Coupon deleted successfully."
+            message: "Coupon deleted successfully!"
         });
     } catch (error) {
         return res.status(400).json({
