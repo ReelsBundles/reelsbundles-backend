@@ -101,7 +101,8 @@ export const getMaintenanceStatus = async (req, res) => {
 export const updateMaintenanceStatus = async (req, res) => {
     try {
         const current = loadSettingsLocal();
-        const { maintenance, message, expectedBack, showTimer, testerPasscode, bypassKey } = req.body;
+        const passcode = testerPasscode !== undefined ? String(testerPasscode).trim() : (current.testerPasscode || "5796");
+        const key = bypassKey !== undefined ? String(bypassKey).trim() : `RB_TESTER_KEY_${passcode}`;
 
         const updated = {
             ...current,
@@ -109,8 +110,8 @@ export const updateMaintenanceStatus = async (req, res) => {
             message: message !== undefined ? String(message).trim() : current.message,
             expectedBack: expectedBack !== undefined ? parseSafeDate(expectedBack) : current.expectedBack,
             showTimer: showTimer !== undefined ? Boolean(showTimer) : current.showTimer,
-            testerPasscode: testerPasscode !== undefined ? String(testerPasscode).trim() : (current.testerPasscode || "5796"),
-            bypassKey: bypassKey !== undefined ? String(bypassKey).trim() : (current.bypassKey || `RB_TESTER_KEY_${Date.now()}`),
+            testerPasscode: passcode,
+            bypassKey: key,
             updatedAt: new Date().toISOString()
         };
 
