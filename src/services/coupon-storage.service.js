@@ -83,6 +83,9 @@ export async function createCoupon(data) {
         usageCount: 0,
         maxUses: data.maxUses ? Number(data.maxUses) : null,
         expiryDate: data.expiryDate ? new Date(data.expiryDate).toISOString() : null,
+        eligibleUserType: data.eligibleUserType || 'all',
+        description: data.description || '',
+        userBadge: data.userBadge || '',
         active: data.active !== false,
         createdAt: new Date().toISOString()
     };
