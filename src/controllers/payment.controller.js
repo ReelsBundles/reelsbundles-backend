@@ -59,9 +59,45 @@ export const createOrder = async (req, res) => {
             if (coupon && coupon.active !== false) {
                 const now = new Date();
                 const notExpired = !coupon.expiryDate || new Date(coupon.expiryDate) > now;
-                const notExceeded = !coupon.maxUses || (coupon.usedCount || 0) < coupon.maxUses;
+                const currentUsage = Number(coupon.usageCount || coupon.usedCount || 0);
+                const notExceeded = !coupon.maxUses || currentUsage < Number(coupon.maxUses);
+                const minOrderMet = !coupon.minOrderAmount || baseAmount >= Number(coupon.minOrderAmount);
 
-                if (notExpired && notExceeded) {
+                let isUserEligible = true;
+                const targetType = String(coupon.eligibleUserType || 'all').toLowerCase();
+                if (targetType !== 'all') {
+                    let isExistingUser = false;
+                    try {
+                        const userEmail = req.user.email || req.body?.email || "";
+                        const userId = req.user.uid || "";
+                        if (userEmail || userId) {
+                            const snap = await db.collection("payments").get();
+                            snap.forEach(doc => {
+                                const data = doc.data() || {};
+                                const status = String(data.paymentStatus || data.status || "").toUpperCase();
+                                if (["PAID", "SUCCESS", "COMPLETED"].includes(status)) {
+                                    if (userEmail && String(data.customerEmail || data.email || "").toLowerCase() === String(userEmail).toLowerCase()) {
+                                        isExistingUser = true;
+                                    }
+                                    if (userId && String(data.userUid || data.userId || "").toLowerCase() === String(userId).toLowerCase()) {
+                                        isExistingUser = true;
+                                    }
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.warn("[PAYMENT COUPON ELIGIBILITY WARN]", e.message);
+                    }
+
+                    if (targetType === 'new_users' && isExistingUser) {
+                        isUserEligible = false;
+                    }
+                    if ((targetType === 'existing_users' || targetType === 'premium') && !isExistingUser) {
+                        isUserEligible = false;
+                    }
+                }
+
+                if (notExpired && notExceeded && minOrderMet && isUserEligible) {
                     let discount = 0;
                     const discountType = String(coupon.discountType || "").toLowerCase();
                     const discountVal = Number(coupon.discountValue || 0);
@@ -75,8 +111,13 @@ export const createOrder = async (req, res) => {
                         discount = discountVal;
                     }
 
+                    if (discount > baseAmount) {
+                        discount = baseAmount;
+                    }
+
                     finalAmount = Math.max(1, baseAmount - discount);
                     appliedCoupon = coupon;
+                    console.log(`[Coupon Applied] Code: ${coupon.code} | Base: ₹${baseAmount} | Discount: ₹${discount} | Final: ₹${finalAmount}`);
                 }
             }
         }
@@ -228,35 +269,51 @@ export const verifyOrder = async (req, res) => {
         }
 
         /* --------------------------------------------------
-           VERIFY WITH UROPAY API
+           VERIFY WITH UROPAY API (WITH BOUNDED RETRY FOR PENDING)
         -------------------------------------------------- */
         let uropayStatus = storedPayment.paymentStatus;
         let uropayPayment = null;
 
-        const currentStatusUpper = String(uropayStatus || "").toUpperCase().trim();
-        const isAlreadyPaid = ["PAID", "SUCCESS", "COMPLETED", "CAPTURED"].includes(currentStatusUpper);
+        const checkPaid = (statusStr) => {
+            return ["PAID", "SUCCESS", "COMPLETED", "CAPTURED"].includes(String(statusStr || "").toUpperCase().trim());
+        };
 
-        // If not already verified locally, fetch authoritative status from UroPay API
+        const isAlreadyPaid = checkPaid(uropayStatus);
+
         if (!isAlreadyPaid) {
             const targetUroPayId = storedPayment.uropayOrderId || orderId;
             console.log("[Payment Verification] Checking UroPay API for order:", targetUroPayId);
 
-            try {
-                uropayPayment = await verifyUroPayOrder(targetUroPayId);
-                uropayStatus = uropayPayment?.status || storedPayment.paymentStatus;
-            } catch (err) {
-                console.warn("[Payment Verification] Error querying UroPay API, falling back to stored status:", err.message);
+            const maxAttempts = 3;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    uropayPayment = await verifyUroPayOrder(targetUroPayId);
+                    uropayStatus = uropayPayment?.status || storedPayment.paymentStatus;
+                    console.log(`[Payment Verification] Attempt ${attempt}/${maxAttempts}: UroPay status = '${uropayStatus}'`);
+
+                    if (checkPaid(uropayStatus)) {
+                        break;
+                    }
+                } catch (err) {
+                    console.warn(`[Payment Verification] Attempt ${attempt} error:`, err.message);
+                }
+
+                if (attempt < maxAttempts && String(uropayStatus).toUpperCase().trim() === "PENDING") {
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                }
             }
         }
 
         const finalStatusUpper = String(uropayStatus || "").toUpperCase().trim();
-        const isPaid = ["PAID", "SUCCESS", "COMPLETED", "CAPTURED"].includes(finalStatusUpper);
+        const isPaid = checkPaid(finalStatusUpper);
 
         if (!isPaid) {
             console.log("[Payment Verification] Order not paid. Status:", uropayStatus);
+            const isPending = ["PENDING", "PROCESSING", "CREATED"].includes(finalStatusUpper);
             return res.status(200).json({
                 success: false,
-                message: `Payment status is ${uropayStatus || "PENDING"}. Payment incomplete.`,
+                pending: isPending,
+                message: isPending ? "Payment is currently processing. Please wait a moment..." : `Payment status is ${uropayStatus || "FAILED"}.`,
                 orderStatus: uropayStatus || "PENDING"
             });
         }
