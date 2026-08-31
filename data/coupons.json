@@ -1,15 +1,1 @@
-[
-  {
-    "id": "cpn_welcome10",
-    "code": "WELCOME10",
-    "discountType": "percentage",
-    "discountValue": 10,
-    "minOrderAmount": 0,
-    "maxDiscount": null,
-    "usageCount": 0,
-    "maxUses": null,
-    "expiryDate": null,
-    "active": true,
-    "createdAt": "2026-08-25T12:00:00.000Z"
-  }
-]
+[]
