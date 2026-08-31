@@ -69,6 +69,7 @@ export const getMaintenanceStatus = async (req, res) => {
                 const docSnap = await docRef.get();
                 if (docSnap.exists) {
                     const remoteData = docSnap.data();
+                    // Prioritize remote custom passcode if set
                     settings = {
                         ...settings,
                         ...remoteData
@@ -80,14 +81,17 @@ export const getMaintenanceStatus = async (req, res) => {
             console.warn("[SYSTEM CONTROLLER] Firestore sync warning:", e?.message);
         }
 
+        const passcode = settings.testerPasscode || "5796";
+        const key = settings.bypassKey || `RB_TESTER_KEY_${passcode}`;
+
         return res.json({
             success: true,
             maintenance: Boolean(settings.maintenance),
             message: settings.message || "🛠️ System Maintenance in progress.",
             expectedBack: settings.expectedBack || null,
             showTimer: settings.showTimer !== false,
-            testerPasscode: settings.testerPasscode || "5796",
-            bypassKey: settings.bypassKey || "RB_TESTER_KEY_5796"
+            testerPasscode: passcode,
+            bypassKey: key
         });
     } catch (err) {
         return res.status(500).json({
