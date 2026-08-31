@@ -7,7 +7,7 @@
 import crypto from "crypto";
 import axios from "axios";
 
-const UROPAY_BASE_URL = "https://api.uropai.in/v1";
+const UROPAY_BASE_URL = "https://api.uropai.in";
 
 /* ==========================================================
    HELPERS & CREDENTIAL LOADING
