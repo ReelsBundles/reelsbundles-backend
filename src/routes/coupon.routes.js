@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
     applyCoupon,
+    getActiveCoupons,
     listCoupons,
     createCoupon,
     toggleCoupon,
@@ -9,8 +10,9 @@ import {
 
 const router = Router();
 
-// Public coupon verification for checkout
+// Public coupon endpoints for checkout
 router.post("/apply-coupon", applyCoupon);
+router.get("/coupons/active", getActiveCoupons);
 
 // Admin coupon management
 router.get("/admin/coupons", listCoupons);

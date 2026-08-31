@@ -103,6 +103,37 @@ export const listCoupons = async (req, res) => {
     }
 };
 
+export const getActiveCoupons = async (req, res) => {
+    try {
+        const coupons = await fetchCouponsAsync();
+        const now = new Date();
+        const activeCoupons = (coupons || []).filter(c => {
+            if (!c.active) return false;
+            if (c.expiryDate && new Date(c.expiryDate) < now) return false;
+            if (c.maxUses && c.usageCount >= c.maxUses) return false;
+            return true;
+        }).map(c => ({
+            id: c.id,
+            code: c.code,
+            discountType: c.discountType,
+            discountValue: c.discountValue,
+            description: c.description || (c.discountType === 'percentage' ? `Get ${c.discountValue}% OFF on your bundle order!` : `Get ₹${c.discountValue} FLAT OFF!`),
+            userBadge: c.userBadge || (String(c.code).toUpperCase().includes('WELCOME') ? '✨ NEW USER OFFER' : '🔥 SPECIAL DISCOUNT'),
+            eligibleUserType: c.eligibleUserType || 'all'
+        }));
+
+        return res.json({
+            success: true,
+            coupons: activeCoupons
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
 export const createCoupon = async (req, res) => {
     try {
         const newCoupon = createCouponService(req.body);
