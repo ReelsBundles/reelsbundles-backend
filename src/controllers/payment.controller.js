@@ -23,6 +23,7 @@ import {
 
 import {
     getCouponByCode,
+    fetchCouponsAsync,
     incrementCouponUsage
 } from "../services/coupon-storage.service.js";
 
@@ -96,6 +97,7 @@ export const createOrder = async (
             );
 
         if (couponCode) {
+            await fetchCouponsAsync();
             const coupon = getCouponByCode(couponCode);
             if (coupon && coupon.active && (!coupon.expiryDate || new Date(coupon.expiryDate) >= new Date())) {
                 let discount = 0;
@@ -106,7 +108,7 @@ export const createOrder = async (
                     discount = coupon.discountValue;
                 }
                 order.order_amount = Math.max(1, selectedPlan.amount - discount);
-                incrementCouponUsage(coupon.code);
+                await incrementCouponUsage(coupon.code);
             }
         }
 

@@ -1,7 +1,7 @@
 import {
-    getAllCoupons,
-    fetchCouponsAsync,
     getCouponByCode,
+    fetchCouponsAsync,
+    incrementCouponUsage,
     createCoupon as createCouponService,
     toggleCoupon as toggleCouponService,
     deleteCoupon as deleteCouponService

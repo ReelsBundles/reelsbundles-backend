@@ -121,22 +121,17 @@ export async function createCashfreeOrder(
 
 
         /* --------------------------------------------------
-           Customer details
+           Customer details (Strict Cashfree API Sanitation)
         -------------------------------------------------- */
 
-        const customerId =
-            order.customer_id ||
-            `RB_${order.order_id}`;
+        const rawCustomerId = order.customer_id || `RB_${order.order_id}`;
+        const customerId = String(rawCustomerId).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 50) || `RB_${Date.now()}`;
 
+        const rawName = order.customer_name || "ReelsBundles Customer";
+        const customerName = String(rawName).replace(/[^a-zA-Z0-9 _-]/g, "").trim().slice(0, 100) || "ReelsBundles Customer";
 
-        const customerName =
-            order.customer_name ||
-            "ReelsBundles Customer";
-
-
-        const customerEmail =
-            order.customer_email ||
-            "reelsbundles.support@gmail.com";
+        const rawEmail = order.customer_email || "";
+        const customerEmail = (rawEmail && rawEmail.includes("@")) ? rawEmail.trim() : "reelsbundles.support@gmail.com";
 
 
         const rawPhone =
