@@ -12,6 +12,13 @@ import {
 const router = Router();
 
 // Public coupon endpoints for checkout
+router.get("/apply-coupon", (req, res) => {
+    return res.status(200).json({
+        success: true,
+        message: "Coupon validation endpoint active. Use HTTP POST with coupon code to apply coupons.",
+        methodRequired: "POST"
+    });
+});
 router.post("/apply-coupon", applyCoupon);
 router.get("/coupons/active", getActiveCoupons);
 

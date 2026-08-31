@@ -40,11 +40,20 @@ router.get(
    LOGIN REQUIRED
 ========================================================== */
 
+router.get(
+    "/create-order",
+    (req, res) => {
+        return res.status(200).json({
+            success: true,
+            message: "Payment order creation endpoint active. Use HTTP POST with authentication to create payment orders.",
+            methodRequired: "POST"
+        });
+    }
+);
+
 router.post(
     "/create-order",
-
     firebaseUserAuth,
-
     createOrder
 );
 
@@ -52,11 +61,18 @@ router.post(
 /* ==========================================================
    VERIFY ORDER
    LOGIN REQUIRED
-
-   IMPORTANT:
-   Only the Firebase user who created
-   the order can verify it.
 ========================================================== */
+
+router.get(
+    "/verify-order",
+    (req, res) => {
+        return res.status(200).json({
+            success: true,
+            message: "Payment verification endpoint active. Use HTTP POST with authentication to verify payment orders.",
+            methodRequired: "POST"
+        });
+    }
+);
 
 router.get(
     "/verify/:orderId",
