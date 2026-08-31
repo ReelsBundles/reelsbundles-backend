@@ -104,6 +104,44 @@ export async function createCoupon(data) {
     return newCoupon;
 }
 
+export async function updateCoupon(id, data) {
+    const coupons = getAllCoupons();
+    const coupon = coupons.find(c => c.id === id);
+    if (!coupon) throw new Error("Coupon not found");
+
+    if (data.code) {
+        const cleanCode = String(data.code).trim().toUpperCase();
+        if (coupons.some(c => c.id !== id && c.code.toUpperCase() === cleanCode)) {
+            throw new Error("Coupon code already exists");
+        }
+        coupon.code = cleanCode;
+    }
+
+    if (data.discountType !== undefined) coupon.discountType = data.discountType === 'flat' ? 'flat' : 'percentage';
+    if (data.discountValue !== undefined) coupon.discountValue = Number(data.discountValue) || 0;
+    if (data.minOrderAmount !== undefined) coupon.minOrderAmount = Number(data.minOrderAmount) || 0;
+    if (data.maxDiscount !== undefined) coupon.maxDiscount = data.maxDiscount ? Number(data.maxDiscount) : null;
+    if (data.maxUses !== undefined) coupon.maxUses = data.maxUses ? Number(data.maxUses) : null;
+    if (data.expiryDate !== undefined) coupon.expiryDate = data.expiryDate ? new Date(data.expiryDate).toISOString() : null;
+    if (data.eligibleUserType !== undefined) coupon.eligibleUserType = data.eligibleUserType;
+    if (data.description !== undefined) coupon.description = data.description;
+    if (data.userBadge !== undefined) coupon.userBadge = data.userBadge;
+    if (data.active !== undefined) coupon.active = Boolean(data.active);
+    coupon.updatedAt = new Date().toISOString();
+
+    saveCoupons(coupons);
+
+    try {
+        if (db) {
+            await db.collection("coupons").doc(id).set(coupon, { merge: true });
+        }
+    } catch (e) {
+        console.warn("[COUPON] Firestore update warning:", e?.message);
+    }
+
+    return coupon;
+}
+
 export async function toggleCoupon(id) {
     const coupons = getAllCoupons();
     const coupon = coupons.find(c => c.id === id);

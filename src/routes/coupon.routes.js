@@ -4,6 +4,7 @@ import {
     getActiveCoupons,
     listCoupons,
     createCoupon,
+    updateCoupon,
     toggleCoupon,
     deleteCoupon
 } from "../controllers/coupon.controller.js";
@@ -17,6 +18,7 @@ router.get("/coupons/active", getActiveCoupons);
 // Admin coupon management
 router.get("/admin/coupons", listCoupons);
 router.post("/admin/coupons", createCoupon);
+router.put("/admin/coupons/:id", updateCoupon);
 router.put("/admin/coupons/:id/toggle", toggleCoupon);
 router.delete("/admin/coupons/:id", deleteCoupon);
 

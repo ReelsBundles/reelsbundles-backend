@@ -3,6 +3,7 @@ import {
     fetchCouponsAsync,
     incrementCouponUsage,
     createCoupon as createCouponService,
+    updateCoupon as updateCouponService,
     toggleCoupon as toggleCouponService,
     deleteCoupon as deleteCouponService
 } from '../services/coupon-storage.service.js';
@@ -184,6 +185,22 @@ export const createCoupon = async (req, res) => {
             success: true,
             message: "Coupon created successfully!",
             coupon: newCoupon
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+export const updateCoupon = async (req, res) => {
+    try {
+        const updated = await updateCouponService(req.params.id, req.body);
+        return res.json({
+            success: true,
+            message: "Coupon updated successfully!",
+            coupon: updated
         });
     } catch (error) {
         return res.status(400).json({
