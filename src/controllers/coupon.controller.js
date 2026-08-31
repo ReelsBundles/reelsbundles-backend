@@ -20,6 +20,7 @@ export const applyCoupon = async (req, res) => {
             });
         }
 
+        await fetchCouponsAsync();
         const coupon = getCouponByCode(code);
         if (!coupon || !coupon.active) {
             return res.status(200).json({
