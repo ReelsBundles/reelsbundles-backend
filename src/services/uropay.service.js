@@ -27,36 +27,40 @@ function checkWhitespace(raw) {
     };
 }
 
-export function getUroPayCredentials() {
-    const envMode = (process.env.UROPAY_ENV || "TEST").toUpperCase();
+export function getUroPayConfig() {
+    const rawEnv = (process.env.UROPAY_ENV || "TEST").toUpperCase().trim();
 
-    // Checked variable names for API Key
-    const keyCandidates = [
-        { name: "UROPAY_TEST_API_KEY", val: process.env.UROPAY_TEST_API_KEY },
-        { name: "UROPAY_API_KEY", val: process.env.UROPAY_API_KEY },
-        { name: "UROPAY_TEST_KEY", val: process.env.UROPAY_TEST_KEY },
-        { name: "UROPAY_KEY", val: process.env.UROPAY_KEY },
-        { name: "UROPAY_PRODUCTION_API_KEY", val: process.env.UROPAY_PRODUCTION_API_KEY }
-    ];
+    if (rawEnv !== "TEST" && rawEnv !== "PRODUCTION") {
+        throw new Error(`Invalid UROPAY_ENV configuration: must be 'TEST' or 'PRODUCTION'. Received '${process.env.UROPAY_ENV}'.`);
+    }
 
-    // Checked variable names for API Secret
-    const secretCandidates = [
-        { name: "UROPAY_TEST_API_SECRET", val: process.env.UROPAY_TEST_API_SECRET },
-        { name: "UROPAY_API_SECRET", val: process.env.UROPAY_API_SECRET },
-        { name: "UROPAY_TEST_SECRET", val: process.env.UROPAY_TEST_SECRET },
-        { name: "UROPAY_SECRET", val: process.env.UROPAY_SECRET },
-        { name: "UROPAY_PRODUCTION_API_SECRET", val: process.env.UROPAY_PRODUCTION_API_SECRET }
-    ];
+    let rawApiKey = "";
+    let rawApiSecret = "";
+    let keyVarName = "";
+    let secretVarName = "";
 
-    let foundKeyObj = keyCandidates.find(c => c.val && c.val.trim() !== "");
-    let foundSecretObj = secretCandidates.find(c => c.val && c.val.trim() !== "");
+    if (rawEnv === "PRODUCTION") {
+        keyVarName = "UROPAY_PRODUCTION_API_KEY";
+        secretVarName = "UROPAY_PRODUCTION_API_SECRET";
+        rawApiKey = process.env.UROPAY_PRODUCTION_API_KEY || process.env.UROPAY_PROD_API_KEY || "";
+        rawApiSecret = process.env.UROPAY_PRODUCTION_API_SECRET || process.env.UROPAY_PROD_API_SECRET || "";
 
-    const rawApiKey = foundKeyObj ? foundKeyObj.val : "";
-    const rawApiSecret = foundSecretObj ? foundSecretObj.val : "";
+        if (!rawApiKey || !rawApiSecret) {
+            throw new Error(`Missing UroPay PRODUCTION credentials: UROPAY_PRODUCTION_API_KEY or UROPAY_PRODUCTION_API_SECRET is required when UROPAY_ENV=PRODUCTION.`);
+        }
+    } else {
+        keyVarName = "UROPAY_TEST_API_KEY";
+        secretVarName = "UROPAY_TEST_API_SECRET";
+        rawApiKey = process.env.UROPAY_TEST_API_KEY || process.env.UROPAY_TEST_KEY || process.env.UROPAY_API_KEY || "";
+        rawApiSecret = process.env.UROPAY_TEST_API_SECRET || process.env.UROPAY_TEST_SECRET || process.env.UROPAY_API_SECRET || "";
+
+        if (!rawApiKey || !rawApiSecret) {
+            throw new Error(`Missing UroPay TEST credentials: UROPAY_TEST_API_KEY or UROPAY_TEST_API_SECRET is required when UROPAY_ENV=TEST.`);
+        }
+    }
 
     const apiKey = cleanCredential(rawApiKey);
     const apiSecret = cleanCredential(rawApiSecret);
-
     const keyWs = checkWhitespace(rawApiKey);
     const secretWs = checkWhitespace(rawApiSecret);
 
@@ -65,15 +69,20 @@ export function getUroPayCredentials() {
         : "";
 
     return {
-        env: envMode,
+        env: rawEnv,
         apiKey,
         apiSecret,
-        keyVarName: foundKeyObj ? foundKeyObj.name : "NONE",
-        secretVarName: foundSecretObj ? foundSecretObj.name : "NONE",
+        baseUrl: UROPAY_BASE_URL,
+        keyVarName,
+        secretVarName,
         keyWhitespace: keyWs,
         secretWhitespace: secretWs,
         secretFingerprint
     };
+}
+
+export function getUroPayCredentials() {
+    return getUroPayConfig();
 }
 
 /* ==========================================================
