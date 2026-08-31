@@ -174,6 +174,11 @@ app.use(
     })
 );
 
+app.use((req, res, next) => {
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    next();
+});
+
 
 /* ==========================================================
    CORS
