@@ -44,27 +44,31 @@ export const submitReview = async (req, res) => {
             return res.status(400).json({ success: false, message: "Detailed Review comment must be at least 10 characters." });
         }
 
-        // Verify user has paid purchase history
-        let hasPaidOrder = false;
+        // Verify user has purchase history or is logged-in creator/admin
+        let hasPaidOrder = true;
         try {
-            if (db) {
-                const userEmail = (req.user.email || "").toLowerCase();
-                const userId = req.user.uid;
+            const userEmail = (req.user.email || "").toLowerCase();
+            const userId = req.user.uid || "";
+
+            // Admin / Tester bypass automatically allowed
+            if (userEmail.includes("admin") || userEmail.includes("tester") || userEmail.includes("reelsbundles")) {
+                hasPaidOrder = true;
+            } else if (db) {
+                let foundOrder = false;
                 const snap = await db.collection("payments").get();
                 snap.forEach(doc => {
                     const data = doc.data() || {};
                     const status = String(data.paymentStatus || data.status || "").toUpperCase();
-                    if (["PAID", "SUCCESS", "COMPLETED", "CAPTURED"].includes(status)) {
+                    if (["PAID", "SUCCESS", "COMPLETED", "CAPTURED", "PENDING"].includes(status)) {
                         if (userEmail && String(data.customerEmail || data.email || "").toLowerCase() === userEmail) {
-                            hasPaidOrder = true;
+                            foundOrder = true;
                         }
                         if (userId && String(data.userUid || data.userId || "").toLowerCase() === userId) {
-                            hasPaidOrder = true;
+                            foundOrder = true;
                         }
                     }
                 });
-            } else {
-                hasPaidOrder = true; // Fallback for dev mode
+                hasPaidOrder = foundOrder;
             }
         } catch (e) {
             hasPaidOrder = true;
@@ -73,7 +77,7 @@ export const submitReview = async (req, res) => {
         if (!hasPaidOrder) {
             return res.status(403).json({
                 success: false,
-                message: "Feedback submission is reserved for verified buyers with a completed order."
+                message: "Feedback submission is reserved for registered creators with an active account or completed order."
             });
         }
 
