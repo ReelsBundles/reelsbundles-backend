@@ -22,6 +22,7 @@ import demoVideoRoutes from "./routes/demo-video.routes.js";
 import userManagementRoutes from "./routes/user-management.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import systemRoutes from "./routes/system.routes.js";
+import reviewRoutes from "./routes/review.routes.js";
 
 import "./config/env.js";
 import { SYSTEM_VERSION } from "./config/version.js";
@@ -471,6 +472,11 @@ app.use(
 app.use(
     "/api",
     systemRoutes
+);
+
+app.use(
+    "/api",
+    reviewRoutes
 );
 
 
