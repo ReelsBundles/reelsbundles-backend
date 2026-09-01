@@ -1,6 +1,9 @@
 import {
     saveReview,
     getApprovedReviews,
+    adminGetAllReviews,
+    updateReview,
+    deleteReview,
     getAggregateReviewStats
 } from "../services/review-storage.service.js";
 
@@ -89,7 +92,8 @@ export const submitReview = async (req, res) => {
             rating: Number(rating),
             qualityRating: String(qualityRating).trim(),
             supportRating: String(supportRating).trim(),
-            comment: String(comment).trim()
+            comment: String(comment).trim(),
+            approved: true
         });
 
         console.log(`[REVIEWS] New Verified Review Submitted by ${newReview.customerName} (${newReview.rating}★)`);
@@ -124,5 +128,84 @@ export const getPublicReviews = async (req, res) => {
             success: false,
             message: "Failed to load customer reviews."
         });
+    }
+};
+
+/* ==========================================================
+   ADMIN FEEDBACK MANAGEMENT CONTROLLERS
+========================================================== */
+
+export const adminGetReviews = async (req, res) => {
+    try {
+        const reviews = await adminGetAllReviews();
+        const stats = await getAggregateReviewStats();
+        return res.json({
+            success: true,
+            stats,
+            reviews
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Failed to fetch admin reviews." });
+    }
+};
+
+export const adminCreateReview = async (req, res) => {
+    try {
+        const { customerName, bundlePlan, rating, qualityRating, supportRating, comment, createdAt, approved } = req.body || {};
+        if (!customerName || !comment) {
+            return res.status(400).json({ success: false, message: "Customer Name and Comment are required." });
+        }
+
+        const newReview = await saveReview({
+            customerName: String(customerName).trim(),
+            bundlePlan: bundlePlan || "premium",
+            rating: Number(rating) || 5,
+            qualityRating: qualityRating || "5/5 Excellent Quality",
+            supportRating: supportRating || "10/10 Excellent Experience",
+            comment: String(comment).trim(),
+            approved: approved !== undefined ? Boolean(approved) : true,
+            createdAt: createdAt || new Date().toISOString()
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: "✓ Review created successfully by Admin.",
+            review: newReview
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const adminUpdateReview = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updated = await updateReview(id, req.body || {});
+        if (!updated) {
+            return res.status(404).json({ success: false, message: "Review not found." });
+        }
+        return res.json({
+            success: true,
+            message: "✓ Review updated successfully.",
+            review: updated
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const adminDeleteReview = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deleted = await deleteReview(id);
+        if (!deleted) {
+            return res.status(404).json({ success: false, message: "Review not found or already deleted." });
+        }
+        return res.json({
+            success: true,
+            message: "✓ Review deleted permanently."
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: error.message });
     }
 };

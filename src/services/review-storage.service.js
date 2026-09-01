@@ -67,7 +67,7 @@ export async function fetchReviewsAsync() {
 
 export async function saveReview(reviewData) {
     const list = loadReviewsLocal();
-    const newId = "rev_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
+    const newId = reviewData.id || ("rev_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6));
     const newReview = {
         id: newId,
         customerName: reviewData.customerName,
@@ -75,14 +75,19 @@ export async function saveReview(reviewData) {
         customerEmail: reviewData.customerEmail || "",
         bundlePlan: reviewData.bundlePlan || "basic",
         rating: Number(reviewData.rating) || 5,
-        qualityRating: reviewData.qualityRating || "5/5 Excellent",
-        supportRating: reviewData.supportRating || "10/10 Excellent",
+        qualityRating: reviewData.qualityRating || "5/5 Excellent Quality",
+        supportRating: reviewData.supportRating || "10/10 Excellent Experience",
         comment: reviewData.comment,
-        approved: true,
-        createdAt: new Date().toISOString()
+        approved: reviewData.approved !== undefined ? Boolean(reviewData.approved) : true,
+        createdAt: reviewData.createdAt || new Date().toISOString()
     };
 
-    list.unshift(newReview);
+    const existingIndex = list.findIndex(r => r.id === newReview.id);
+    if (existingIndex !== -1) {
+        list[existingIndex] = newReview;
+    } else {
+        list.unshift(newReview);
+    }
     saveReviewsLocal(list);
 
     try {
@@ -99,6 +104,52 @@ export async function saveReview(reviewData) {
 export async function getApprovedReviews() {
     const list = await fetchReviewsAsync();
     return list.filter(r => r.approved !== false);
+}
+
+export async function adminGetAllReviews() {
+    const list = await fetchReviewsAsync();
+    return list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+}
+
+export async function updateReview(id, updateData) {
+    const list = await fetchReviewsAsync();
+    const index = list.findIndex(r => r.id === id);
+    if (index === -1) return null;
+
+    const updated = {
+        ...list[index],
+        ...updateData,
+        updatedAt: new Date().toISOString()
+    };
+    list[index] = updated;
+    saveReviewsLocal(list);
+
+    try {
+        if (db) {
+            await db.collection("reviews").doc(id).set(updated, { merge: true });
+        }
+    } catch (e) {
+        console.warn("[REVIEWS] Firestore update warning:", e?.message);
+    }
+
+    return updated;
+}
+
+export async function deleteReview(id) {
+    let list = loadReviewsLocal();
+    const initialLen = list.length;
+    list = list.filter(r => r.id !== id);
+    saveReviewsLocal(list);
+
+    try {
+        if (db) {
+            await db.collection("reviews").doc(id).delete();
+        }
+    } catch (e) {
+        console.warn("[REVIEWS] Firestore delete warning:", e?.message);
+    }
+
+    return list.length < initialLen;
 }
 
 export async function getAggregateReviewStats() {
