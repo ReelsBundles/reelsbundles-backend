@@ -103,6 +103,7 @@ export async function createNotification(data) {
 }
 
 export async function updateNotification(id, data) {
+    await fetchNotificationsAsync();
     const list = loadNotifications();
     const index = list.findIndex(n => n.id === id);
     if (index === -1) return null;
