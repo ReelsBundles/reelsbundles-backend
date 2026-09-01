@@ -199,16 +199,19 @@ export const getPublicStats = async (req, res) => {
             satisfactionPercentage: 99
         }));
 
-        const totalCustomersCount = 10000 + paidCount;
+        const baseCount = 10000;
+        const totalCustomersCount = baseCount + paidCount + (reviewStats.totalReviews || 0);
         const totalCustomersFormatted = (totalCustomersCount / 1000).toFixed(1) + "K+";
 
         return res.json({
             success: true,
             stats: {
                 readyReels: "200K+",
+                readyReelsCount: 200000,
                 happyCustomers: totalCustomersFormatted,
                 happyCustomersCount: totalCustomersCount,
                 satisfaction: `${reviewStats.satisfactionPercentage || 99}%`,
+                satisfactionPercentage: reviewStats.satisfactionPercentage || 99,
                 averageRating: reviewStats.averageRating || 4.9,
                 totalReviews: reviewStats.totalReviews || 1250,
                 support: "24/7",
