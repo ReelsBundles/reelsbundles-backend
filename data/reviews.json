@@ -1,0 +1,28 @@
+[
+  {
+    "id": "rev_1788248165001_kcic",
+    "customerName": "Aarav Sharma",
+    "userUid": "",
+    "customerEmail": "",
+    "bundlePlan": "premium",
+    "rating": 5,
+    "qualityRating": "5/5 Excellent Quality",
+    "supportRating": "10/10 Excellent Experience",
+    "comment": "Amazing reels quality! High resolution videos with fast download speed.",
+    "approved": true,
+    "createdAt": "2026-09-01T07:36:05.001Z"
+  },
+  {
+    "id": "rev_1788253925139_nwug",
+    "customerName": "admin",
+    "userUid": "OOtdxVsMeggJAgv8xfJ1prUXdrI3",
+    "customerEmail": "admin5796@gmail.com",
+    "bundlePlan": "premium",
+    "rating": 5,
+    "qualityRating": "5/5 Excellent Quality",
+    "supportRating": "10/10 Excellent Experience",
+    "comment": "This is Wonderfull and a im so happy",
+    "approved": true,
+    "createdAt": "2026-09-01T09:12:05.140Z"
+  }
+]

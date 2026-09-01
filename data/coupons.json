@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id": "cpn_1788189326666_fdr9x",
+    "code": "SAMARTH11",
+    "discountType": "percentage",
+    "discountValue": 20,
+    "minOrderAmount": 0,
+    "maxDiscount": null,
+    "maxUses": null,
+    "expiryDate": null,
+    "eligibleUserType": "new_users",
+    "description": "",
+    "userBadge": "",
+    "active": true,
+    "createdAt": "2026-08-31T15:15:26.666Z",
+    "usageCount": 5
+  }
+]
