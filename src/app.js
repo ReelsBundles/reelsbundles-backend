@@ -655,6 +655,8 @@ app.use(
                 ? error.statusCode
                 : 500;
 
+        res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+        res.setHeader("Access-Control-Allow-Credentials", "true");
 
         return res
             .status(

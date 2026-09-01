@@ -170,3 +170,54 @@ export const verifyMaintenancePin = async (req, res) => {
         return res.status(500).json({ success: false, valid: false });
     }
 };
+
+/* ==========================================================
+   PUBLIC LIVE SYSTEM STATS API
+========================================================== */
+export const getPublicStats = async (req, res) => {
+    try {
+        let paidCount = 0;
+        try {
+            if (db) {
+                const snap = await db.collection("payments").get();
+                snap.forEach(doc => {
+                    const data = doc.data() || {};
+                    const status = String(data.paymentStatus || data.status || "").toUpperCase();
+                    if (["PAID", "SUCCESS", "COMPLETED", "CAPTURED"].includes(status)) {
+                        paidCount++;
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn("[PUBLIC STATS WARN]", e?.message);
+        }
+
+        const totalCustomersCount = 10000 + paidCount;
+        const totalCustomersFormatted = (totalCustomersCount / 1000).toFixed(1) + "K+";
+
+        return res.json({
+            success: true,
+            stats: {
+                readyReels: "200K+",
+                happyCustomers: totalCustomersFormatted,
+                happyCustomersCount: totalCustomersCount,
+                satisfaction: "99%",
+                support: "24/7",
+                liveSynced: true,
+                totalPaidOrders: paidCount
+            }
+        });
+    } catch (err) {
+        return res.json({
+            success: true,
+            stats: {
+                readyReels: "200K+",
+                happyCustomers: "10.0K+",
+                happyCustomersCount: 10000,
+                satisfaction: "99%",
+                support: "24/7",
+                liveSynced: false
+            }
+        });
+    }
+};
