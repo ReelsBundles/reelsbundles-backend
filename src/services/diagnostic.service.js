@@ -917,6 +917,399 @@ export function getPageHealth() {
 }
 
 /* ==========================================================
+   REPORT DATA GENERATOR
+   Generates comprehensive, filtered telemetry datasets for
+   USER, ADMIN, and ALL reports with multi-level aggregations.
+========================================================== */
+export function getReportData(options = {}) {
+    const reportType = (options.reportType || "ALL").toUpperCase();
+    const now = new Date();
+    let startMs = 0;
+    let endMs = Infinity;
+
+    // 1. Date Range Filtering
+    const dateRange = options.dateRange || "7d";
+    let rangeLabel = "Last 7 Days";
+
+    if (dateRange === "today") {
+        const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        startMs = d.getTime();
+        rangeLabel = "Today (" + d.toISOString().slice(0, 10) + ")";
+    } else if (dateRange === "yesterday") {
+        const dStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        const dEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        startMs = dStart.getTime();
+        endMs = dEnd.getTime();
+        rangeLabel = "Yesterday (" + dStart.toISOString().slice(0, 10) + ")";
+    } else if (dateRange === "7d") {
+        startMs = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+        rangeLabel = "Last 7 Days";
+    } else if (dateRange === "30d") {
+        startMs = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+        rangeLabel = "Last 30 Days";
+    } else if (dateRange === "custom" || options.startDate || options.endDate) {
+        if (options.startDate) {
+            const s = new Date(options.startDate);
+            startMs = isNaN(s.getTime()) ? 0 : s.getTime();
+        }
+        if (options.endDate) {
+            const e = new Date(options.endDate);
+            if (!isNaN(e.getTime())) {
+                if (String(options.endDate).length <= 10) {
+                    e.setHours(23, 59, 59, 999);
+                }
+                endMs = e.getTime();
+            }
+        }
+        const sLabel = options.startDate ? options.startDate.slice(0, 10) : "Beginning";
+        const eLabel = options.endDate ? options.endDate.slice(0, 10) : "Now";
+        rangeLabel = `${sLabel} to ${eLabel}`;
+    }
+
+    // 2. Filter records
+    let list = requestBuffer.filter(r => {
+        const rTime = new Date(r.timestamp).getTime();
+        if (rTime < startMs || rTime > endMs) return false;
+
+        // Report Type (USER vs ADMIN vs ALL)
+        if (reportType === "USER") {
+            if (r.source !== "USER" && r.source !== "PUBLIC") return false;
+        } else if (reportType === "ADMIN") {
+            if (r.source !== "ADMIN") return false;
+        }
+
+        // Additional optional source filter
+        if (options.source && options.source !== "ALL" && r.source !== options.source) {
+            return false;
+        }
+
+        // Result filter
+        if (options.result && options.result !== "ALL" && r.result !== options.result) {
+            return false;
+        }
+
+        // Method filter
+        if (options.method && options.method !== "ALL" && r.method !== options.method.toUpperCase()) {
+            return false;
+        }
+
+        // Status code family (2xx, 3xx, 4xx, 5xx)
+        if (options.statusCode && options.statusCode !== "ALL") {
+            const family = parseInt(options.statusCode[0], 10);
+            if (!isNaN(family) && Math.floor(r.status_code / 100) !== family) {
+                return false;
+            }
+        }
+
+        // Category filter
+        if (options.category && options.category !== "ALL" && r.error_category !== options.category) {
+            return false;
+        }
+
+        // Page filter
+        if (options.page && !String(r.page || "").toLowerCase().includes(options.page.toLowerCase())) {
+            return false;
+        }
+
+        // Endpoint filter
+        if (options.endpoint && !String(r.endpoint || "").toLowerCase().includes(options.endpoint.toLowerCase())) {
+            return false;
+        }
+
+        // Request ID filter
+        if (options.requestId && !String(r.request_id || "").toLowerCase().includes(options.requestId.toLowerCase())) {
+            return false;
+        }
+
+        // Search query
+        if (options.search) {
+            const q = String(options.search).toLowerCase().trim();
+            const match = (
+                (r.endpoint && r.endpoint.toLowerCase().includes(q)) ||
+                (r.request_id && r.request_id.toLowerCase().includes(q)) ||
+                (r.page && r.page.toLowerCase().includes(q)) ||
+                (r.safe_error_message && r.safe_error_message.toLowerCase().includes(q)) ||
+                (r.safe_root_cause && r.safe_root_cause.toLowerCase().includes(q)) ||
+                (r.error_category && r.error_category.toLowerCase().includes(q)) ||
+                (r.status_code && String(r.status_code).includes(q))
+            );
+            if (!match) return false;
+        }
+
+        return true;
+    });
+
+    // Sort newest first
+    list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // 3. Compute Summary Statistics
+    const totalRequests = list.length;
+    let pass = 0;
+    let fail = 0;
+    let count4xx = 0;
+    let count5xx = 0;
+    let totalDuration = 0;
+    let userRequests = 0;
+    let adminRequests = 0;
+
+    let userPass = 0;
+    let userTotal = 0;
+    let adminPass = 0;
+    let adminTotal = 0;
+    let paymentPass = 0;
+    let paymentTotal = 0;
+    let downloadPass = 0;
+    let downloadTotal = 0;
+    let databasePass = 0;
+    let databaseTotal = 0;
+
+    for (const r of list) {
+        if (r.result === "PASS") pass++;
+        else fail++;
+
+        if (r.status_code >= 400 && r.status_code < 500) count4xx++;
+        if (r.status_code >= 500) count5xx++;
+        totalDuration += (r.duration_ms || 0);
+
+        if (r.source === "USER" || r.source === "PUBLIC") {
+            userRequests++;
+            userTotal++;
+            if (r.result === "PASS") userPass++;
+        } else if (r.source === "ADMIN") {
+            adminRequests++;
+            adminTotal++;
+            if (r.result === "PASS") adminPass++;
+        }
+
+        if (r.endpoint && (r.endpoint.includes("/payment") || r.endpoint.includes("/webhook"))) {
+            paymentTotal++;
+            if (r.result === "PASS") paymentPass++;
+        }
+        if (r.endpoint && (r.endpoint.includes("/download") || r.endpoint.includes("/secure-download"))) {
+            downloadTotal++;
+            if (r.result === "PASS") downloadPass++;
+        }
+        if (r.error_category === "DATABASE") {
+            databaseTotal++;
+        }
+    }
+
+    const errorRate = totalRequests > 0 ? parseFloat(((fail / totalRequests) * 100).toFixed(1)) : 0.0;
+    const avgDurationMs = totalRequests > 0 ? Math.round(totalDuration / totalRequests) : 0;
+
+    const userApiHealth = userTotal > 0 ? Math.round((userPass / userTotal) * 100) : 100;
+    const adminApiHealth = adminTotal > 0 ? Math.round((adminPass / adminTotal) * 100) : 100;
+    const paymentHealth = paymentTotal > 0 ? Math.round((paymentPass / paymentTotal) * 100) : 100;
+    const downloadHealth = downloadTotal > 0 ? Math.round((downloadPass / downloadTotal) * 100) : 100;
+    const databaseHealth = databaseTotal > 0 ? Math.max(0, 100 - (databaseTotal * 10)) : 100;
+
+    const overallHealth = Math.round(
+        (userApiHealth * 0.25) +
+        (adminApiHealth * 0.20) +
+        (paymentHealth * 0.20) +
+        (downloadHealth * 0.15) +
+        (databaseHealth * 0.10) +
+        (100 * 0.10)
+    );
+
+    // 4. Detailed Request Log
+    const requests = list.map(r => ({
+        timestamp: r.timestamp,
+        timeFormatted: r.time_formatted || new Date(r.timestamp).toLocaleTimeString(),
+        source: r.source || "PUBLIC",
+        page: r.page || "Landing",
+        method: r.method || "GET",
+        endpoint: r.endpoint || "/",
+        statusCode: r.status_code || 200,
+        result: r.result || "PASS",
+        durationMs: r.duration_ms || 0,
+        errorCategory: r.error_category || (r.result === "FAIL" ? "ERROR" : ""),
+        errorCode: r.error_code || (r.result === "FAIL" ? "HTTP_" + r.status_code : "OK"),
+        safeErrorMessage: r.safe_error_message || "",
+        safeRootCause: r.safe_root_cause || "",
+        requestId: r.request_id || r.id || ""
+    }));
+
+    // 5. Endpoint Health Aggregation
+    const epMap = new Map();
+    for (const r of list) {
+        const ep = r.endpoint || "/";
+        if (!epMap.has(ep)) {
+            epMap.set(ep, {
+                endpoint: ep,
+                source: r.source,
+                requests: 0,
+                passed: 0,
+                failed: 0,
+                count4xx: 0,
+                count5xx: 0,
+                latencies: []
+            });
+        }
+        const item = epMap.get(ep);
+        item.requests++;
+        if (r.result === "PASS") item.passed++;
+        else {
+            item.failed++;
+            if (r.status_code >= 400 && r.status_code < 500) item.count4xx++;
+            if (r.status_code >= 500) item.count5xx++;
+        }
+        if (r.duration_ms) item.latencies.push(r.duration_ms);
+    }
+
+    const endpointHealth = Array.from(epMap.values()).map(item => {
+        const epErrorRate = item.requests > 0 ? parseFloat(((item.failed / item.requests) * 100).toFixed(1)) : 0.0;
+        const avg = item.latencies.length > 0 ? Math.round(item.latencies.reduce((a, b) => a + b, 0) / item.latencies.length) : 0;
+        item.latencies.sort((a, b) => a - b);
+        const p95 = item.latencies[Math.floor(item.latencies.length * 0.95)] || avg;
+
+        return {
+            endpoint: item.endpoint,
+            source: item.source,
+            requests: item.requests,
+            passed: item.passed,
+            failed: item.failed,
+            count4xx: item.count4xx,
+            count5xx: item.count5xx,
+            errorRate: epErrorRate,
+            avgResponse: avg,
+            p95Response: p95
+        };
+    });
+    endpointHealth.sort((a, b) => b.failed - a.failed || b.requests - a.requests);
+
+    // 6. Error Summary Aggregation
+    const catMap = new Map();
+    let totalErrors = 0;
+    for (const r of list) {
+        if (r.result === "FAIL") {
+            totalErrors++;
+            const cat = r.error_category || "UNKNOWN";
+            if (!catMap.has(cat)) {
+                catMap.set(cat, {
+                    category: cat,
+                    count: 0,
+                    endpoints: new Set(),
+                    latest: r.timestamp
+                });
+            }
+            const cItem = catMap.get(cat);
+            cItem.count++;
+            if (r.endpoint) cItem.endpoints.add(r.endpoint);
+            if (new Date(r.timestamp) > new Date(cItem.latest)) {
+                cItem.latest = r.timestamp;
+            }
+        }
+    }
+
+    const errorSummary = Array.from(catMap.values()).map(c => ({
+        category: c.category,
+        count: c.count,
+        percentage: totalErrors > 0 ? parseFloat(((c.count / totalErrors) * 100).toFixed(1)) : 0.0,
+        affectedEndpoints: Array.from(c.endpoints).slice(0, 5).join(", "),
+        latestOccurrence: c.latest
+    }));
+    errorSummary.sort((a, b) => b.count - a.count);
+
+    // 7. Page Health Aggregation
+    const pgMap = new Map();
+    for (const r of list) {
+        const pg = r.page || "Landing";
+        if (!pgMap.has(pg)) {
+            pgMap.set(pg, {
+                page: pg,
+                source: r.source,
+                requests: 0,
+                passed: 0,
+                failed: 0,
+                latencies: []
+            });
+        }
+        const pItem = pgMap.get(pg);
+        pItem.requests++;
+        if (r.result === "PASS") pItem.passed++;
+        else pItem.failed++;
+        if (r.duration_ms) pItem.latencies.push(r.duration_ms);
+    }
+
+    const pageHealth = Array.from(pgMap.values()).map(p => {
+        const pgErrorRate = p.requests > 0 ? parseFloat(((p.failed / p.requests) * 100).toFixed(1)) : 0.0;
+        const avg = p.latencies.length > 0 ? Math.round(p.latencies.reduce((a, b) => a + b, 0) / p.latencies.length) : 0;
+        return {
+            page: p.page,
+            source: p.source,
+            requests: p.requests,
+            passed: p.passed,
+            failed: p.failed,
+            errorRate: pgErrorRate,
+            avgResponse: avg
+        };
+    });
+    pageHealth.sort((a, b) => b.failed - a.failed || b.requests - a.requests);
+
+    // 8. Incidents Table
+    const incidents = [];
+    for (const r of list) {
+        if (r.result === "FAIL") {
+            let severity = "LOW";
+            if (r.status_code >= 500 || r.error_category?.includes("UROPAY") || r.error_category === "DATABASE") {
+                severity = "CRITICAL";
+            } else if (r.error_category === "AUTHENTICATION" || r.error_category === "ENTITLEMENT") {
+                severity = "HIGH";
+            } else if (r.status_code >= 400) {
+                severity = "MEDIUM";
+            }
+
+            incidents.push({
+                timestamp: r.timestamp,
+                source: r.source || "PUBLIC",
+                page: r.page || "Landing",
+                endpoint: r.endpoint || "/",
+                statusCode: r.status_code || 500,
+                category: r.error_category || "ERROR",
+                safeError: r.safe_error_message || "Operation failed",
+                rootCause: r.safe_root_cause || "UNKNOWN / NEEDS INVESTIGATION",
+                requestId: r.request_id || r.id || "",
+                severity
+            });
+        }
+    }
+    // Sort critical first
+    const sevOrder = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+    incidents.sort((a, b) => (sevOrder[b.severity] || 0) - (sevOrder[a.severity] || 0));
+
+    return {
+        success: true,
+        reportType,
+        dateRange: rangeLabel,
+        generatedAt: new Date().toISOString(),
+        environment: "PRODUCTION",
+        summary: {
+            totalRequests,
+            pass,
+            fail,
+            count4xx,
+            count5xx,
+            errorRate,
+            avgDurationMs,
+            userRequests,
+            adminRequests,
+            overallHealth,
+            userApiHealth,
+            adminApiHealth,
+            paymentHealth,
+            downloadHealth,
+            databaseHealth
+        },
+        requests,
+        endpointHealth,
+        errorSummary,
+        pageHealth,
+        incidents
+    };
+}
+
+/* ==========================================================
    LOG MAINTENANCE & RETENTION CLEAR
    Strictly wipes ONLY diagnostic logs. NEVER affects users,
    orders, bundles, payments, or downloads.

@@ -20,6 +20,7 @@ import {
     getEndpointHealth,
     getPageHealth,
     getActiveIncidents,
+    getReportData,
     clearDiagnosticLogs
 } from "../src/services/diagnostic.service.js";
 
@@ -330,7 +331,72 @@ async function runTests() {
         assert.strictEqual(incidents.length, 2);
     });
 
-    // 12. Retention Policy & Clear Logs
+    // 12. Report Data Generation: USER Report
+    test("getReportData({ reportType: 'USER' }) includes only user activity", () => {
+        const report = getReportData({ reportType: "USER" });
+        assert.strictEqual(report.success, true);
+        assert.strictEqual(report.reportType, "USER");
+        assert.strictEqual(report.summary.totalRequests, 2);
+        assert.strictEqual(report.summary.userRequests, 2);
+        assert.strictEqual(report.summary.adminRequests, 0);
+        assert.ok(report.requests.every(r => r.source === "USER" || r.source === "PUBLIC"));
+        assert.ok(Array.isArray(report.endpointHealth));
+        assert.ok(Array.isArray(report.errorSummary));
+        assert.ok(Array.isArray(report.pageHealth));
+        assert.ok(Array.isArray(report.incidents));
+    });
+
+    // 13. Report Data Generation: ADMIN Report
+    test("getReportData({ reportType: 'ADMIN' }) includes only admin activity", () => {
+        const report = getReportData({ reportType: "ADMIN" });
+        assert.strictEqual(report.success, true);
+        assert.strictEqual(report.reportType, "ADMIN");
+        assert.strictEqual(report.summary.totalRequests, 2);
+        assert.strictEqual(report.summary.adminRequests, 2);
+        assert.strictEqual(report.summary.userRequests, 0);
+        assert.ok(report.requests.every(r => r.source === "ADMIN"));
+    });
+
+    // 14. Report Data Generation: ALL Report
+    test("getReportData({ reportType: 'ALL' }) combines both and retains Source column", () => {
+        const report = getReportData({ reportType: "ALL" });
+        assert.strictEqual(report.success, true);
+        assert.strictEqual(report.reportType, "ALL");
+        assert.strictEqual(report.summary.totalRequests, 4);
+        assert.strictEqual(report.summary.userRequests, 2);
+        assert.strictEqual(report.summary.adminRequests, 2);
+        assert.ok(report.requests.some(r => r.source === "USER"));
+        assert.ok(report.requests.some(r => r.source === "ADMIN"));
+    });
+
+    // 15. Report Data Filtering: Result, Category, Date Range
+    test("getReportData respects Result, Category, and Date Range filters", () => {
+        const failOnly = getReportData({ result: "FAIL" });
+        assert.strictEqual(failOnly.summary.totalRequests, 2);
+        assert.strictEqual(failOnly.summary.fail, 2);
+        assert.strictEqual(failOnly.summary.pass, 0);
+
+        const paymentOnly = getReportData({ category: "UROPAY_UPSTREAM" });
+        assert.strictEqual(paymentOnly.summary.totalRequests, 1);
+        assert.strictEqual(paymentOnly.requests[0].endpoint, "/api/payment/create-order");
+
+        const todayReport = getReportData({ dateRange: "today" });
+        assert.strictEqual(todayReport.summary.totalRequests, 4);
+    });
+
+    // 16. Empty Report Data Handling (Zero fake records)
+    test("getReportData handles empty queries cleanly without mock records", () => {
+        const emptyReport = getReportData({ search: "non_existent_search_query_xyz" });
+        assert.strictEqual(emptyReport.success, true);
+        assert.strictEqual(emptyReport.summary.totalRequests, 0);
+        assert.strictEqual(emptyReport.summary.pass, 0);
+        assert.strictEqual(emptyReport.summary.fail, 0);
+        assert.strictEqual(emptyReport.requests.length, 0);
+        assert.strictEqual(emptyReport.endpointHealth.length, 0);
+        assert.strictEqual(emptyReport.errorSummary.length, 0);
+    });
+
+    // 17. Retention Policy & Clear Logs
     test("Retention clear wipes monitoring records only", () => {
         const res = clearDiagnosticLogs();
         assert.strictEqual(res.success, true);

@@ -14,6 +14,7 @@ import {
     getPageHealth,
     getActiveIncidents,
     clearDiagnosticLogs,
+    getReportData,
     recordRequest,
     generateRequestId
 } from "../services/diagnostic.service.js";
@@ -185,6 +186,37 @@ router.get("/incidents", monitorAdminAuth, (req, res) => {
 router.post("/clear", monitorAdminAuth, (req, res) => {
     const result = clearDiagnosticLogs();
     return res.json(result);
+});
+
+/* ==========================================================
+   8B. REPORT DATA EXPORT ENDPOINT
+   GET /api/admin/monitor/report-data
+   Returns aggregated, filtered telemetry for PDF and Excel reports.
+========================================================== */
+router.get("/report-data", monitorAdminAuth, (req, res) => {
+    try {
+        const report = getReportData({
+            reportType: req.query.reportType,
+            dateRange: req.query.dateRange,
+            startDate: req.query.startDate,
+            endDate: req.query.endDate,
+            source: req.query.source,
+            result: req.query.result,
+            method: req.query.method,
+            statusCode: req.query.statusCode,
+            category: req.query.category,
+            page: req.query.page,
+            endpoint: req.query.endpoint,
+            requestId: req.query.requestId,
+            search: req.query.search
+        });
+        return res.json(report);
+    } catch (err) {
+        return res.status(500).json({
+            success: false,
+            message: "Report generation failed: " + err.message
+        });
+    }
 });
 
 /* ==========================================================
