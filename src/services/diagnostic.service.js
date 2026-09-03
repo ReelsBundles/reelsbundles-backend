@@ -293,11 +293,30 @@ export function classifyError(entry) {
     }
 
     // 7. Database (Firestore / Supabase)
-    if (errorCombined.includes("firestore") || errorCombined.includes("collection") || errorCombined.includes("document") || errorCombined.includes("snapshot") || errorCombined.includes("database")) {
+    if (
+        errorCombined.includes("firestore") ||
+        errorCombined.includes("collection") ||
+        errorCombined.includes("document") ||
+        errorCombined.includes("snapshot") ||
+        errorCombined.includes("database") ||
+        errorCombined.includes("16 unauthenticated") ||
+        (errorCombined.includes("unauthenticated") && (errorCombined.includes("oauth 2") || errorCombined.includes("developers.google.com") || errorCombined.includes("devconsole-project") || errorCombined.includes("grpc")))
+    ) {
         let rc = "DATABASE → query failed";
-        if (errorCombined.includes("connection") || errorCombined.includes("unavailable")) rc = "DATABASE → connection failed";
-        else if (errorCombined.includes("permission") || errorCombined.includes("insufficient permissions")) rc = "DATABASE → permission denied";
-        else if (errorCombined.includes("not found")) rc = "DATABASE → document missing";
+        if (errorCombined.includes("connection") || errorCombined.includes("unavailable")) {
+            rc = "DATABASE → connection failed";
+        } else if (
+            errorCombined.includes("16 unauthenticated") ||
+            errorCombined.includes("oauth 2") ||
+            errorCombined.includes("developers.google.com") ||
+            errorCombined.includes("devconsole-project")
+        ) {
+            rc = "DATABASE → service account credentials invalid or expired";
+        } else if (errorCombined.includes("permission") || errorCombined.includes("insufficient permissions")) {
+            rc = "DATABASE → permission denied";
+        } else if (errorCombined.includes("not found")) {
+            rc = "DATABASE → document missing";
+        }
 
         return {
             category: "DATABASE",
@@ -328,7 +347,16 @@ export function classifyError(entry) {
     }
 
     // 10. Authentication (401)
-    if (status === 401 || errorCombined.includes("unauthenticated") || errorCombined.includes("invalid token") || errorCombined.includes("token expired") || errorCombined.includes("authentication required")) {
+    if (
+        status === 401 ||
+        (
+            (errorCombined.includes("unauthenticated") || errorCombined.includes("invalid token") || errorCombined.includes("token expired") || errorCombined.includes("authentication required")) &&
+            !errorCombined.includes("oauth 2") &&
+            !errorCombined.includes("developers.google.com") &&
+            !errorCombined.includes("devconsole-project") &&
+            !errorCombined.includes("16 unauthenticated")
+        )
+    ) {
         let rc = "AUTH → invalid session";
         if (errorCombined.includes("token expired")) rc = "AUTH → token expired";
         else if (errorCombined.includes("missing") || errorCombined.includes("header missing")) rc = "AUTH → missing token";

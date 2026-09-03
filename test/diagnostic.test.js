@@ -148,6 +148,18 @@ async function runTests() {
         assert.strictEqual(result.rootCause, "DATABASE → connection failed");
     });
 
+    test("Classifies Google Cloud Firestore 16 UNAUTHENTICATED as DATABASE error (not client AUTH)", () => {
+        const entry = {
+            statusCode: 500,
+            endpoint: "/api/admin/dashboard/",
+            errorMessage: "16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project."
+        };
+        const result = classifyError(entry);
+        assert.strictEqual(result.category, "DATABASE");
+        assert.strictEqual(result.code, "DATABASE_ERROR");
+        assert.strictEqual(result.rootCause, "DATABASE → service account credentials invalid or expired");
+    });
+
     // 6. Error Classification: AUTHENTICATION & AUTHORIZATION
     test("Classifies 401 Authentication error", () => {
         const entry = {
