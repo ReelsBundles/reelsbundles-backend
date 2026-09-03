@@ -10,8 +10,9 @@ service-account.json
 *.pem
 *.key
 
-# Logs
+# Logs & Runtime Data
 logs/
+data/
 *.log
 npm-debug.log*
 

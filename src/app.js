@@ -23,6 +23,8 @@ import userManagementRoutes from "./routes/user-management.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import systemRoutes from "./routes/system.routes.js";
 import reviewRoutes from "./routes/review.routes.js";
+import diagnosticRoutes, { clientMonitorRoutes } from "./routes/diagnostic.routes.js";
+import { diagnosticMiddleware } from "./middleware/diagnostic.middleware.js";
 
 import "./config/env.js";
 import { SYSTEM_VERSION } from "./config/version.js";
@@ -324,6 +326,16 @@ app.use(
 
 
 /* ==========================================================
+   DIAGNOSTIC & OBSERVABILITY MONITOR
+   Zero-disruption request telemetry interceptor
+========================================================== */
+
+app.use(
+    diagnosticMiddleware
+);
+
+
+/* ==========================================================
    HTTP LOGGING
 ========================================================== */
 
@@ -522,6 +534,21 @@ app.use(
     notificationRoutes
 );
 
+/* ----------------------------------------------------------
+   DIAGNOSTIC & OBSERVABILITY MONITOR
+   Admin Diagnostic APIs & Client Error Receiver
+---------------------------------------------------------- */
+
+app.use(
+    "/api/admin/monitor",
+    diagnosticRoutes
+);
+
+app.use(
+    "/api/monitor",
+    clientMonitorRoutes
+);
+
 
 /* ==========================================================
    HEALTH CHECK
@@ -606,6 +633,13 @@ app.use(
             "[Backend Error]",
             error
         );
+
+        if (req?.diagnostic) {
+            try {
+                req.diagnostic.setError(error);
+                req.diagnostic.addTimeline("Unhandled backend exception", error?.message || "Unknown error");
+            } catch (e) {}
+        }
 
 
         /*
