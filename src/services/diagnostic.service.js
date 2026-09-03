@@ -460,7 +460,8 @@ export function buildFailureChain(entry, classification) {
 ========================================================== */
 export function recordRequest(payload) {
     try {
-        const isPass = (payload.statusCode || 200) < 400;
+        const sc = Number(payload.statusCode || payload.status_code || 200);
+        const isPass = sc < 400 && payload.result !== "FAIL";
         const now = new Date();
 
         let classification = null;
@@ -472,8 +473,8 @@ export function recordRequest(payload) {
         }
 
         const safeEntry = {
-            id: payload.requestId || generateRequestId(),
-            request_id: payload.requestId || generateRequestId(),
+            id: payload.requestId || payload.id || generateRequestId(),
+            request_id: payload.requestId || payload.id || generateRequestId(),
             correlation_id: payload.correlationId || `corr_${Date.now()}`,
             timestamp: payload.timestamp || now.toISOString(),
             time_formatted: now.toTimeString().split(" ")[0],
@@ -482,9 +483,9 @@ export function recordRequest(payload) {
             method: (payload.method || "GET").toUpperCase(),
             endpoint: payload.endpoint || "/",
             path: sanitizeString(payload.path || payload.endpoint || "/"),
-            status_code: Number(payload.statusCode || 200),
+            status_code: sc,
             result: isPass ? "PASS" : "FAIL",
-            duration_ms: Math.max(0, Math.round(payload.durationMs || 0)),
+            duration_ms: Math.max(0, Math.round(payload.durationMs || payload.duration_ms || 0)),
             error_category: classification ? classification.category : null,
             error_code: classification ? classification.code : null,
             safe_error_message: classification ? sanitizeString(classification.safeMessage) : null,
