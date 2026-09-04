@@ -352,11 +352,11 @@ export async function getUserBundleFiles(user, bundleId, requestedFolderId = nul
             } else if (!requestedFolderId) {
                 items.unshift({
                     id: `mega_${access.bundle.id}`,
-                    name: `${access.bundle.name || 'Reels Bundle'} (MEGA Cloud Storage)`,
-                    type: "mega",
-                    mimeType: "application/vnd.mega.cloud-storage",
-                    megaLink: access.megaLink,
-                    size: null
+                    name: `${access.bundle.name || 'Reels Bundle'} (MEGA Package Download)`,
+                    type: "file",
+                    mimeType: "application/zip",
+                    size: null,
+                    isMega: true
                 });
             }
         } catch (err) {
@@ -364,11 +364,11 @@ export async function getUserBundleFiles(user, bundleId, requestedFolderId = nul
             if (!requestedFolderId) {
                 items.unshift({
                     id: `mega_${access.bundle.id}`,
-                    name: `${access.bundle.name || 'Reels Bundle'} (MEGA Cloud Storage)`,
-                    type: "mega",
-                    mimeType: "application/vnd.mega.cloud-storage",
-                    megaLink: access.megaLink,
-                    size: null
+                    name: `${access.bundle.name || 'Reels Bundle'} (MEGA Package Download)`,
+                    type: "file",
+                    mimeType: "application/zip",
+                    size: null,
+                    isMega: true
                 });
             }
         }

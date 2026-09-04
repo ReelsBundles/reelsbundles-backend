@@ -146,6 +146,11 @@ export async function downloadUserBundleFile(req, res) {
             });
         }
 
+        const hasMega = Boolean(access.megaLink);
+        const hasDrive = Boolean(access.folderId || access.folderLink);
+        const isMegaTarget = hasMega && (!hasDrive || fileId.startsWith("mega_") || fileId === "root" || fileId.length <= 16);
+        const downloadSource = isMegaTarget ? "MEGA" : "GOOGLE_DRIVE";
+
         // Log authorized download
         try {
             await saveDownloadLog({
@@ -154,6 +159,8 @@ export async function downloadUserBundleFile(req, res) {
                 plan: access.bundle?.plan || "basic",
                 bundleId: access.bundle?.id || bundleId,
                 bundleName: access.bundle?.name || access.bundle?.title || "Reels Bundle",
+                fileId: fileId,
+                source: downloadSource,
                 customerName: user.displayName || user.name || "Customer",
                 customerEmail: user.email || "",
                 customerPhone: user.phoneNumber || user.phone || "",
@@ -166,7 +173,7 @@ export async function downloadUserBundleFile(req, res) {
             console.warn("[downloadUserBundleFile] saveDownloadLog warning:", logErr.message);
         }
 
-        if (access.megaLink) {
+        if (isMegaTarget) {
             return await streamMegaFile(access.megaLink, fileId, res);
         }
 
@@ -281,23 +288,40 @@ export async function openUserBundleMega(req, res) {
             });
         }
 
-        let targetUrl = String(access.megaLink).trim();
-        if (!targetUrl.startsWith("http://") && !targetUrl.startsWith("https://")) {
-            targetUrl = "https://" + targetUrl;
+        const targetFileId = req.query.fileId ? String(req.query.fileId).trim() : "root";
+
+        // Log authorized download
+        try {
+            await saveDownloadLog({
+                orderId: null,
+                category: access.bundle?.category || "reels",
+                plan: access.bundle?.plan || "basic",
+                bundleId: access.bundle?.id || bundleId,
+                bundleName: access.bundle?.name || access.bundle?.title || "Reels Bundle",
+                fileId: targetFileId,
+                source: "MEGA",
+                customerName: user.displayName || user.name || "Customer",
+                customerEmail: user.email || "",
+                customerPhone: user.phoneNumber || user.phone || "",
+                amount: 0,
+                ip: req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "127.0.0.1",
+                userAgent: req.headers["user-agent"] || "Browser",
+                status: "SUCCESS"
+            });
+        } catch (logErr) {
+            console.warn("[openUserBundleMega] saveDownloadLog warning:", logErr.message);
         }
 
-        const fileId = req.query.fileId ? String(req.query.fileId).trim() : null;
-        if (fileId) {
-            targetUrl += `/file/${encodeURIComponent(fileId)}`;
-        }
-
-        return res.redirect(302, targetUrl);
+        return await streamMegaFile(access.megaLink, targetFileId, res);
     } catch (error) {
         console.error("[User Bundle] MEGA open error:", error);
-        return res.status(500).json({
-            success: false,
-            message: "Unable to open MEGA storage."
-        });
+        if (!res.headersSent) {
+            return res.status(500).json({
+                success: false,
+                message: "Unable to stream MEGA storage."
+            });
+        }
+        res.end();
     }
 }
 
