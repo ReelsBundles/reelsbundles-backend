@@ -5,8 +5,10 @@ import {
     isDriveItemWithinRoot
 } from "./google-drive-stream.service.js";
 import { listMegaFolder } from "./mega-storage.service.js";
+import { extractFileId } from "../utils/drive.js";
+import { loadLocalPayments } from "./payment-storage.service.js";
 
-const paymentsCollection = db.collection("payments");
+const paymentsCollection = db ? db.collection("payments") : null;
 
 function normalizeEmail(value) {
     let email = String(value || "").trim().toLowerCase();
@@ -91,11 +93,23 @@ function paymentBelongsToUser(payment, user) {
 async function getUserEntitledPlans(user) {
     if (!user?.uid) return [];
 
-    const snapshot = await paymentsCollection.get();
     const plans = new Set();
+    let docs = [];
 
-    snapshot.forEach(doc => {
-        const payment = doc.data() || {};
+    try {
+        if (paymentsCollection) {
+            const snapshot = await paymentsCollection.get();
+            snapshot.forEach(doc => docs.push(doc.data() || {}));
+        }
+    } catch (err) {
+        console.warn("[getUserEntitledPlans] Firestore payments lookup warning (fallback to local):", err.message);
+    }
+
+    if (docs.length === 0) {
+        docs = loadLocalPayments();
+    }
+
+    docs.forEach(payment => {
         if (!isPaid(payment)) return;
         if (!paymentBelongsToUser(payment, user)) return;
 
@@ -319,13 +333,13 @@ export async function getUserBundleFiles(user, bundleId, requestedFolderId = nul
     }
 
     // Fallback Drive item if drive list is empty or service account unavailable, ONLY for drive bundles
-    if (items.length === 0 && access.folderLink && !access.megaLink && !requestedFolderId) {
+    if (items.length === 0 && (access.folderId || access.folderLink) && !access.megaLink && !requestedFolderId) {
+        const driveFileId = access.folderId || (access.folderLink ? extractFileId(access.folderLink) : `bundle_${access.bundle.id}`);
         items.push({
-            id: `drive_${access.bundle.id}`,
-            name: `${access.bundle.name || 'Reels Bundle'} (Google Drive Folder)`,
-            type: "drive",
-            mimeType: "application/vnd.google-apps.folder",
-            folderLink: access.folderLink,
+            id: driveFileId,
+            name: `${access.bundle.name || 'Reels Bundle'} (Full Package Download)`,
+            type: "file",
+            mimeType: "application/zip",
             size: null
         });
     }

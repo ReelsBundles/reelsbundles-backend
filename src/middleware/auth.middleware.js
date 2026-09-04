@@ -120,29 +120,33 @@ export const firebaseUserAuth = async (req, res, next) => {
         let isSuspendedInDb = false;
         let dbReason = null;
 
-        if (userId) {
-            const userDoc = await db.collection("users").doc(userId).get();
-            if (userDoc.exists) {
-                const userData = userDoc.data() || {};
-                if (userData.locked === true || userData.status === "SUSPENDED" || userData.status === "disabled") {
-                    isSuspendedInDb = true;
-                    dbReason = userData.suspensionReason;
-                }
-            }
-        }
-
-        if (!isSuspendedInDb && userEmail) {
-            const snap = await db.collection("users").where("email", "==", userEmail).get();
-            if (!snap.empty) {
-                for (const doc of snap.docs) {
-                    const data = doc.data() || {};
-                    if (data.locked === true || data.status === "SUSPENDED" || data.status === "disabled") {
+        try {
+            if (db && userId) {
+                const userDoc = await db.collection("users").doc(userId).get();
+                if (userDoc.exists) {
+                    const userData = userDoc.data() || {};
+                    if (userData.locked === true || userData.status === "SUSPENDED" || userData.status === "disabled") {
                         isSuspendedInDb = true;
-                        dbReason = data.suspensionReason;
-                        break;
+                        dbReason = userData.suspensionReason;
                     }
                 }
             }
+
+            if (!isSuspendedInDb && db && userEmail) {
+                const snap = await db.collection("users").where("email", "==", userEmail).get();
+                if (!snap.empty) {
+                    for (const doc of snap.docs) {
+                        const data = doc.data() || {};
+                        if (data.locked === true || data.status === "SUSPENDED" || data.status === "disabled") {
+                            isSuspendedInDb = true;
+                            dbReason = data.suspensionReason;
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (dbErr) {
+            console.warn("[firebaseUserAuth] Firestore user lookup warning (fallback to localStatus):", dbErr.message);
         }
 
         if (isSuspendedInDb) {
@@ -161,12 +165,16 @@ export const firebaseUserAuth = async (req, res, next) => {
                 if (prevSession.ip !== currentIp && prevSession.userAgent !== currentUserAgent) {
                     console.warn(`[Suspicious Activity] Account sharing detected for UID: ${userId}. IP: ${prevSession.ip} -> ${currentIp}, User-Agent: ${prevSession.userAgent} -> ${currentUserAgent}`);
                     
-                    await db.collection("users").doc(userId).set({
-                        locked: true,
-                        status: "SUSPENDED",
-                        suspendedAt: new Date(),
-                        suspensionReason: `Simultaneous logins detected. IP1: ${prevSession.ip}, IP2: ${currentIp}`
-                    }, { merge: true });
+                    try {
+                        if (db) {
+                            await db.collection("users").doc(userId).set({
+                                locked: true,
+                                status: "SUSPENDED",
+                                suspendedAt: new Date(),
+                                suspensionReason: `Simultaneous logins detected. IP1: ${prevSession.ip}, IP2: ${currentIp}`
+                            }, { merge: true });
+                        }
+                    } catch (e) {}
 
                     activeSessions.delete(userId);
 

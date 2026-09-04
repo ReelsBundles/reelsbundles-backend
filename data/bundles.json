@@ -1,0 +1,42 @@
+[
+  {
+    "id": "bundle_basic_reels_01",
+    "name": "Viral Instagram Reels Bundle (Basic)",
+    "slug": "viral-instagram-reels-bundle-basic",
+    "plan": "basic",
+    "page": 1,
+    "title": "Ready-To-Post Viral Instagram Reels (Basic)",
+    "description": "Access our curated collection of viral reels, hooks, and editing templates.",
+    "thumbnail": "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+    "active": true,
+    "basic": {
+      "title": "Viral Instagram Reels Bundle (Basic)",
+      "description": "Ready-to-post Instagram reels for personal brands and creators.",
+      "folderId": "1A2B3C4D5E6F7G8H9I0J",
+      "fileId": "1A2B3C4D5E6F7G8H9I0J",
+      "folderLink": "https://drive.google.com/drive/folders/1A2B3C4D5E6F7G8H9I0J",
+      "megaLink": ""
+    },
+    "createdAt": "2026-09-04T14:50:05.741Z"
+  },
+  {
+    "id": "bundle_premium_pro_02",
+    "name": "Ultimate Pro Instagram Reels Bundle (Premium)",
+    "slug": "ultimate-pro-instagram-reels-bundle-premium",
+    "plan": "premium",
+    "page": 1,
+    "title": "Ultimate Pro Instagram Reels & High-Ticket Templates",
+    "description": "Complete access to all Basic & Premium reels, AI voiceovers, captions, and source assets.",
+    "thumbnail": "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+    "active": true,
+    "premium": {
+      "title": "Ultimate Pro Instagram Reels Bundle (Premium)",
+      "description": "All reels packages + premium source files and bonuses.",
+      "folderId": "1K2L3M4N5O6P7Q8R9S0T",
+      "fileId": "1K2L3M4N5O6P7Q8R9S0T",
+      "folderLink": "https://drive.google.com/drive/folders/1K2L3M4N5O6P7Q8R9S0T",
+      "megaLink": ""
+    },
+    "createdAt": "2026-09-04T14:50:05.742Z"
+  }
+]

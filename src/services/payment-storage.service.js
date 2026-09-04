@@ -1,4 +1,45 @@
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { db } from "../config/firebase.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.join(__dirname, "../../data");
+const PAYMENTS_FILE = path.join(DATA_DIR, "payments.json");
+
+function ensureDirectoryExistence(filePath) {
+    const dirname = path.dirname(filePath);
+    if (!fs.existsSync(dirname)) {
+        fs.mkdirSync(dirname, { recursive: true });
+    }
+}
+
+export function loadLocalPayments() {
+    try {
+        if (!fs.existsSync(PAYMENTS_FILE)) {
+            ensureDirectoryExistence(PAYMENTS_FILE);
+            fs.writeFileSync(PAYMENTS_FILE, "[]", "utf-8");
+            return [];
+        }
+        const raw = fs.readFileSync(PAYMENTS_FILE, "utf-8");
+        return JSON.parse(raw || "[]");
+    } catch (err) {
+        console.warn("[PAYMENT STORAGE] Load local payments error:", err.message);
+        return [];
+    }
+}
+
+export function saveLocalPayments(payments) {
+    try {
+        ensureDirectoryExistence(PAYMENTS_FILE);
+        fs.writeFileSync(PAYMENTS_FILE, JSON.stringify(payments, null, 2), "utf-8");
+        return true;
+    } catch (err) {
+        console.warn("[PAYMENT STORAGE] Save local payments error:", err.message);
+        return false;
+    }
+}
 
 
 /* ==========================================================
@@ -20,17 +61,36 @@ export async function savePayment(
 
     }
 
+    // 1. Save to local persistent storage
+    const payments = loadLocalPayments();
+    const idx = payments.findIndex(p => p.orderId === paymentData.orderId || p.id === paymentData.orderId);
+    if (idx >= 0) {
+        payments[idx] = { ...payments[idx], ...paymentData, updatedAt: new Date().toISOString() };
+    } else {
+        payments.unshift({
+            id: paymentData.orderId,
+            ...paymentData,
+            createdAt: paymentData.createdAt || new Date().toISOString()
+        });
+    }
+    saveLocalPayments(payments);
 
-    await db
-        .collection("payments")
-        .doc(paymentData.orderId)
-        .set(
-            paymentData,
-            {
-                merge: true
-            }
-        );
-
+    // 2. Attempt Firestore sync safely
+    try {
+        if (db) {
+            await db
+                .collection("payments")
+                .doc(paymentData.orderId)
+                .set(
+                    paymentData,
+                    {
+                        merge: true
+                    }
+                );
+        }
+    } catch (err) {
+        console.warn("[PAYMENT STORAGE] Firestore savePayment warning (saved locally):", err.message);
+    }
 
     return true;
 
@@ -51,29 +111,27 @@ export async function getPayment(
 
     }
 
+    try {
+        if (db) {
+            const doc =
+                await db
+                    .collection("payments")
+                    .doc(orderId)
+                    .get();
 
-    const doc =
-        await db
-            .collection("payments")
-            .doc(orderId)
-            .get();
-
-
-    if (!doc.exists) {
-
-        return null;
-
+            if (doc.exists) {
+                return {
+                    id: doc.id,
+                    ...doc.data()
+                };
+            }
+        }
+    } catch (err) {
+        console.warn("[PAYMENT STORAGE] Firestore getPayment warning (fallback to local):", err.message);
     }
 
-
-    return {
-
-        id:
-            doc.id,
-
-        ...doc.data()
-
-    };
+    const localPayments = loadLocalPayments();
+    return localPayments.find(p => p.orderId === orderId || p.id === orderId) || null;
 
 }
 
@@ -95,17 +153,28 @@ export async function updatePayment(
 
     }
 
+    const payments = loadLocalPayments();
+    const idx = payments.findIndex(p => p.orderId === orderId || p.id === orderId);
+    if (idx >= 0) {
+        payments[idx] = { ...payments[idx], ...data, updatedAt: new Date().toISOString() };
+        saveLocalPayments(payments);
+    }
 
-    await db
-        .collection("payments")
-        .doc(orderId)
-        .set(
-            data,
-            {
-                merge: true
-            }
-        );
-
+    try {
+        if (db) {
+            await db
+                .collection("payments")
+                .doc(orderId)
+                .set(
+                    data,
+                    {
+                        merge: true
+                    }
+                );
+        }
+    } catch (err) {
+        console.warn("[PAYMENT STORAGE] Firestore updatePayment warning (updated locally):", err.message);
+    }
 
     return true;
 
@@ -126,12 +195,19 @@ export async function deletePayment(
 
     }
 
+    const payments = loadLocalPayments().filter(p => p.orderId !== orderId && p.id !== orderId);
+    saveLocalPayments(payments);
 
-    await db
-        .collection("payments")
-        .doc(orderId)
-        .delete();
-
+    try {
+        if (db) {
+            await db
+                .collection("payments")
+                .doc(orderId)
+                .delete();
+        }
+    } catch (err) {
+        console.warn("[PAYMENT STORAGE] Firestore deletePayment warning:", err.message);
+    }
 
     return true;
 
@@ -279,28 +355,41 @@ export async function getUserEntitlement(
     }
 
 
-    const snapshot =
-        await db
-            .collection("payments")
-            .where(
-                "userUid",
-                "==",
-                userUid
-            )
-            .get();
+    let snapshotDocs = [];
+    try {
+        if (db) {
+            const snapshot =
+                await db
+                    .collection("payments")
+                    .where(
+                        "userUid",
+                        "==",
+                        userUid
+                    )
+                    .get();
+            snapshot.forEach(doc => snapshotDocs.push({ id: doc.id, data: doc.data() || {} }));
+        }
+    } catch (err) {
+        console.warn("[PAYMENT STORAGE] Firestore getUserEntitlement warning (fallback to local):", err.message);
+    }
 
+    if (snapshotDocs.length === 0) {
+        const localPayments = loadLocalPayments();
+        localPayments.filter(p => p.userUid === userUid || p.firebaseUid === userUid || p.uid === userUid).forEach(p => {
+            snapshotDocs.push({ id: p.id || p.orderId, data: p });
+        });
+    }
 
     const purchases = [];
 
     let effectivePlan =
         "free";
 
-
-    snapshot.forEach(
-        (doc) => {
+    snapshotDocs.forEach(
+        (docItem) => {
 
             const data =
-                doc.data() || {};
+                docItem.data || {};
 
 
             const status =
@@ -512,31 +601,41 @@ export async function getPaidPaymentsByUserUid(
 ) {
 
     if (!userUid) {
-
         return [];
-
     }
 
+    let snapshotDocs = [];
+    try {
+        if (db) {
+            const snapshot =
+                await db
+                    .collection("payments")
+                    .where(
+                        "userUid",
+                        "==",
+                        userUid
+                    )
+                    .get();
+            snapshot.forEach(doc => snapshotDocs.push({ id: doc.id, data: doc.data() || {} }));
+        }
+    } catch (err) {
+        console.warn("[PAYMENT STORAGE] Firestore getPaidPaymentsByUserUid warning (fallback to local):", err.message);
+    }
 
-    const snapshot =
-        await db
-            .collection("payments")
-            .where(
-                "userUid",
-                "==",
-                userUid
-            )
-            .get();
-
+    if (snapshotDocs.length === 0) {
+        const localPayments = loadLocalPayments();
+        localPayments.filter(p => p.userUid === userUid || p.firebaseUid === userUid || p.uid === userUid).forEach(p => {
+            snapshotDocs.push({ id: p.id || p.orderId, data: p });
+        });
+    }
 
     const payments = [];
 
-
-    snapshot.forEach(
-        (doc) => {
+    snapshotDocs.forEach(
+        (docItem) => {
 
             const data =
-                doc.data() || {};
+                docItem.data || {};
 
 
             const status =

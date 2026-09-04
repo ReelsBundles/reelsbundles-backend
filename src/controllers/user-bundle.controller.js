@@ -12,6 +12,7 @@ import {
 import { streamMegaFile } from "../services/mega-storage.service.js";
 import { db } from "../config/firebase.js";
 import { updateUserSuspension, updateUserSuspensionByEmail } from "../services/user-storage.service.js";
+import { saveDownloadLog } from "../services/download-log.service.js";
 
 export async function getUserBundles(req, res) {
     try {
@@ -95,8 +96,7 @@ export async function listUserBundleFiles(req, res) {
                     mimeType: item.mimeType || null,
                     size: item.size ?? null,
                     modifiedTime: item.modifiedTime || null,
-                    isMega: item.isMega === true || item.type === "mega" || Boolean(item.megaLink),
-                    folderLink: item.folderLink || null
+                    isMega: item.isMega === true || item.type === "mega" || Boolean(item.megaLink)
                 }))
                 : []
         });
@@ -144,6 +144,26 @@ export async function downloadUserBundleFile(req, res) {
                 locked: access.locked === true,
                 message: access.message || "Download access denied."
             });
+        }
+
+        // Log authorized download
+        try {
+            await saveDownloadLog({
+                orderId: null,
+                category: access.bundle?.category || "reels",
+                plan: access.bundle?.plan || "basic",
+                bundleId: access.bundle?.id || bundleId,
+                bundleName: access.bundle?.name || access.bundle?.title || "Reels Bundle",
+                customerName: user.displayName || user.name || "Customer",
+                customerEmail: user.email || "",
+                customerPhone: user.phoneNumber || user.phone || "",
+                amount: 0,
+                ip: req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "127.0.0.1",
+                userAgent: req.headers["user-agent"] || "Browser",
+                status: "SUCCESS"
+            });
+        } catch (logErr) {
+            console.warn("[downloadUserBundleFile] saveDownloadLog warning:", logErr.message);
         }
 
         if (access.megaLink) {

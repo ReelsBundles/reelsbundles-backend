@@ -1,3 +1,6 @@
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { db } from "../config/firebase.js";
 
 import {
@@ -10,9 +13,46 @@ import {
     isValidFileId
 } from "../utils/drive.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DATA_DIR = path.join(__dirname, "../../data");
+const BUNDLES_FILE = path.join(DATA_DIR, "bundles.json");
+
+function ensureDirectoryExistence(filePath) {
+    const dirname = path.dirname(filePath);
+    if (!fs.existsSync(dirname)) {
+        fs.mkdirSync(dirname, { recursive: true });
+    }
+}
+
+export function loadLocalBundles() {
+    try {
+        if (!fs.existsSync(BUNDLES_FILE)) {
+            ensureDirectoryExistence(BUNDLES_FILE);
+            fs.writeFileSync(BUNDLES_FILE, "[]", "utf-8");
+            return [];
+        }
+        const raw = fs.readFileSync(BUNDLES_FILE, "utf-8");
+        return JSON.parse(raw || "[]");
+    } catch (err) {
+        console.warn("[BUNDLE SERVICE] Load local bundles error:", err.message);
+        return [];
+    }
+}
+
+export function saveLocalBundles(bundles) {
+    try {
+        ensureDirectoryExistence(BUNDLES_FILE);
+        fs.writeFileSync(BUNDLES_FILE, JSON.stringify(bundles, null, 2), "utf-8");
+        return true;
+    } catch (err) {
+        console.warn("[BUNDLE SERVICE] Save local bundles error:", err.message);
+        return false;
+    }
+}
 
 const collection =
-    db.collection("bundles");
+    db ? db.collection("bundles") : null;
 
 
 /* ==========================================================
@@ -50,36 +90,30 @@ async function slugExists(
     ignoreId = null
 ) {
 
-    const snapshot =
-        await collection
-            .where(
-                "slug",
-                "==",
-                slug
-            )
-            .limit(1)
-            .get();
+    try {
+        if (collection) {
+            const snapshot =
+                await collection
+                    .where(
+                        "slug",
+                        "==",
+                        slug
+                    )
+                    .limit(1)
+                    .get();
 
-
-    if (snapshot.empty) {
-
-        return false;
-
+            if (!snapshot.empty) {
+                if (!ignoreId) return true;
+                const doc = snapshot.docs[0];
+                return doc.id !== ignoreId;
+            }
+        }
+    } catch (e) {
+        console.warn("[slugExists] Firestore query warning:", e.message);
     }
 
-
-    if (!ignoreId) {
-
-        return true;
-
-    }
-
-
-    const doc =
-        snapshot.docs[0];
-
-
-    return doc.id !== ignoreId;
+    const localBundles = loadLocalBundles();
+    return localBundles.some(b => b.slug === slug && (!ignoreId || b.id !== ignoreId));
 
 }
 
@@ -236,27 +270,37 @@ function mapBundle(doc) {
 ========================================================== */
 
 export async function getBundles() {
-    let snapshot;
+    let snapshot = null;
     try {
-        snapshot = await collection.orderBy("name").get();
+        if (collection) {
+            try {
+                snapshot = await collection.orderBy("name").get();
+            } catch (e) {
+                snapshot = await collection.get();
+            }
+        }
     } catch (e) {
-        console.warn("[getBundles] orderBy('name') failed, falling back to simple get():", e.message);
-        snapshot = await collection.get();
+        console.warn("[getBundles] Firestore query failed (fallback to local bundles):", e.message);
     }
 
-    const bundles = [];
-
-    snapshot.forEach((doc) => {
-        try {
-            const mapped = mapBundle(doc);
-            bundles.push(mapped);
-        } catch (err) {
-            console.warn(`[getBundles] Error mapping bundle doc ${doc.id}:`, err.message);
-            bundles.push({ id: doc.id, ...doc.data() });
+    if (snapshot && !snapshot.empty) {
+        const bundles = [];
+        snapshot.forEach((doc) => {
+            try {
+                const mapped = mapBundle(doc);
+                bundles.push(mapped);
+            } catch (err) {
+                console.warn(`[getBundles] Error mapping bundle doc ${doc.id}:`, err.message);
+                bundles.push({ id: doc.id, ...doc.data() });
+            }
+        });
+        if (bundles.length > 0) {
+            saveLocalBundles(bundles);
+            return bundles;
         }
-    });
+    }
 
-    return bundles;
+    return loadLocalBundles();
 }
 /* ==========================================================
    GET SINGLE BUNDLE
@@ -272,21 +316,23 @@ export async function getBundle(
 
     }
 
+    try {
+        if (collection) {
+            const doc =
+                await collection
+                    .doc(id)
+                    .get();
 
-    const doc =
-        await collection
-            .doc(id)
-            .get();
-
-
-    if (!doc.exists) {
-
-        return null;
-
+            if (doc.exists) {
+                return mapBundle(doc);
+            }
+        }
+    } catch (e) {
+        console.warn(`[getBundle] Firestore get failed for ${id} (fallback to local):`, e.message);
     }
 
-
-    return mapBundle(doc);
+    const localBundles = loadLocalBundles();
+    return localBundles.find(b => String(b.id) === String(id) || String(b.slug) === String(id)) || null;
 
 }
 
@@ -311,21 +357,29 @@ export async function createBundle(data) {
 
     bundle.createdAt = now();
 
+    let docId = "bnd_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
+    try {
+        if (collection) {
+            const doc =
+                await collection.add(
+                    bundle
+                );
+            docId = doc.id;
+        }
+    } catch (e) {
+        console.warn("[createBundle] Firestore add warning (saved locally):", e.message);
+    }
 
-    const doc =
-        await collection.add(
-            bundle
-        );
-
-
-    return {
-
-        id:
-            doc.id,
-
+    const created = {
+        id: docId,
         ...bundle
-
     };
+
+    const localBundles = loadLocalBundles();
+    localBundles.unshift(created);
+    saveLocalBundles(localBundles);
+
+    return created;
 
 }
 
@@ -347,34 +401,16 @@ export async function updateBundle(
 
     }
 
-
-    const doc =
-        await collection
-            .doc(id)
-            .get();
-
-
-    if (!doc.exists) {
-
-        throw new Error(
-            "Bundle not found."
-        );
-
-    }
-
-
     const bundle =
         normalizeBundle(
             data
         );
-
 
     const exists =
         await slugExists(
             bundle.slug,
             id
         );
-
 
     if (exists) {
 
@@ -384,13 +420,24 @@ export async function updateBundle(
 
     }
 
+    const localBundles = loadLocalBundles();
+    const idx = localBundles.findIndex(b => String(b.id) === String(id));
+    if (idx >= 0) {
+        localBundles[idx] = { ...localBundles[idx], ...bundle, updatedAt: now() };
+        saveLocalBundles(localBundles);
+    }
 
-    await collection
-        .doc(id)
-        .update(
-            bundle
-        );
-
+    try {
+        if (collection) {
+            await collection
+                .doc(id)
+                .update(
+                    bundle
+                );
+        }
+    } catch (e) {
+        console.warn(`[updateBundle] Firestore update failed for ${id} (updated locally):`, e.message);
+    }
 
     return {
 
@@ -522,26 +569,18 @@ export async function deleteBundle(
 
     }
 
+    const localBundles = loadLocalBundles().filter(b => String(b.id) !== String(id));
+    saveLocalBundles(localBundles);
 
-    const doc =
-        await collection
-            .doc(id)
-            .get();
-
-
-    if (!doc.exists) {
-
-        throw new Error(
-            "Bundle not found."
-        );
-
+    try {
+        if (collection) {
+            await collection
+                .doc(id)
+                .delete();
+        }
+    } catch (e) {
+        console.warn(`[deleteBundle] Firestore delete failed for ${id}:`, e.message);
     }
-
-
-    await collection
-        .doc(id)
-        .delete();
-
 
     return true;
 
@@ -564,44 +603,37 @@ export async function toggleBundle(
 
     }
 
-
-    const doc =
-        await collection
-            .doc(id)
-            .get();
-
-
-    if (!doc.exists) {
-
-        throw new Error(
-            "Bundle not found."
-        );
-
+    let newStatus = false;
+    const localBundles = loadLocalBundles();
+    const idx = localBundles.findIndex(b => String(b.id) === String(id));
+    if (idx >= 0) {
+        newStatus = !Boolean(localBundles[idx].active);
+        localBundles[idx].active = newStatus;
+        localBundles[idx].updatedAt = now();
+        saveLocalBundles(localBundles);
     }
 
+    try {
+        if (collection) {
+            const doc =
+                await collection
+                    .doc(id)
+                    .get();
 
-    const data =
-        doc.data();
-
-
-    const newStatus =
-        !Boolean(
-            data.active
-        );
-
-
-    await collection
-        .doc(id)
-        .update({
-
-            active:
-                newStatus,
-
-            updatedAt:
-                now()
-
-        });
-
+            if (doc.exists) {
+                const data = doc.data();
+                newStatus = !Boolean(data.active);
+                await collection
+                    .doc(id)
+                    .update({
+                        active: newStatus,
+                        updatedAt: now()
+                    });
+            }
+        }
+    } catch (e) {
+        console.warn(`[toggleBundle] Firestore toggle failed for ${id}:`, e.message);
+    }
 
     return newStatus;
 
@@ -709,71 +741,11 @@ export async function getBundlesByPlan(
 
     }
 
-
-    /*
-     * IMPORTANT:
-     *
-     * Only one Firestore filter.
-     *
-     * Firestore automatically handles the single-field
-     * index for "active".
-     */
-
-    const snapshot =
-        await collection
-            .where(
-                "active",
-                "==",
-                true
-            )
-            .get();
-
-
-    const bundles = [];
-
-
-    snapshot.forEach(
-        doc => {
-
-            const data =
-                doc.data();
-
-
-            const bundlePlan =
-                String(
-                    data.plan || ""
-                )
-                    .trim()
-                    .toLowerCase();
-
-
-            /*
-             * Filter purchased plan locally.
-             */
-
-            if (
-                bundlePlan !==
-                normalizedPlan
-            ) {
-
-                return;
-
-            }
-
-
-            bundles.push(
-                mapBundle(doc)
-            );
-
-        }
-    );
-
-
-    /*
-     * Sort AFTER Firestore query.
-     *
-     * No Firestore orderBy is required.
-     */
+    const allBundles = await getBundles();
+    const bundles = allBundles.filter(b => {
+        const bundlePlan = String(b.plan || "").trim().toLowerCase();
+        return b.active === true && bundlePlan === normalizedPlan;
+    });
 
     bundles.sort(
         (
@@ -817,7 +789,6 @@ export async function getBundlesByPlan(
 
         }
     );
-
 
     return bundles;
 
@@ -983,72 +954,19 @@ export async function getActiveDownloadBundle(plan) {
 
 export async function getPublicActiveBundles() {
 
-    const snapshot =
-        await collection
-            .where(
-                "active",
-                "==",
-                true
-            )
-            .get();
+    const allBundles = await getBundles();
+    const activeBundles = allBundles.filter(b => b && b.active === true);
 
-
-    const bundles = [];
-
-
-    snapshot.forEach(
-        (doc) => {
-
-            const data =
-                doc.data() || {};
-
-
-            bundles.push({
-
-                id:
-                    doc.id,
-
-                name:
-                    data.name ||
-                    "Reels Bundle",
-
-                slug:
-                    data.slug ||
-                    "",
-
-                plan:
-                    String(
-                        data.plan || ""
-                    )
-                        .trim()
-                        .toLowerCase(),
-
-                page:
-                    Number(
-                        data.page || 1
-                    ),
-
-                thumbnail:
-                    data.thumbnail ||
-                    "",
-
-                active:
-                    data.active === true,
-
-                title:
-                    data.title ||
-                    data.name ||
-                    "Ready-To-Post Reels"
-
-            });
-
-        }
-    );
-
-
-    /* --------------------------------------------------
-       SORT
-    -------------------------------------------------- */
+    const bundles = activeBundles.map(data => ({
+        id: data.id,
+        name: data.name || "Reels Bundle",
+        slug: data.slug || "",
+        plan: String(data.plan || "").trim().toLowerCase(),
+        page: Number(data.page || 1),
+        thumbnail: data.thumbnail || "",
+        active: true,
+        title: data.title || data.name || "Ready-To-Post Reels"
+    }));
 
     bundles.sort(
         (a, b) => {

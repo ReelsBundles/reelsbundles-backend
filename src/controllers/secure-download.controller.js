@@ -15,6 +15,10 @@ import {
     streamDriveFile
 } from "../services/google-drive-stream.service.js";
 
+import {
+    saveDownloadLog
+} from "../services/download-log.service.js";
+
 
 /* ==========================================================
    SECURE DOWNLOAD
@@ -253,6 +257,28 @@ export async function secureDownloadUserBundle(
             }
         );
 
+        /* --------------------------------------------------
+           LOG DOWNLOAD
+        -------------------------------------------------- */
+
+        try {
+            await saveDownloadLog({
+                orderId: null,
+                category: bundle.category || "reels",
+                plan: plan || "basic",
+                bundleId: bundle.id || bundleId,
+                bundleName: bundle.name || bundle.title || "Reels Bundle",
+                customerName: user.displayName || user.name || "Customer",
+                customerEmail: user.email || "",
+                customerPhone: user.phoneNumber || user.phone || "",
+                amount: 0,
+                ip: req.ip || req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "127.0.0.1",
+                userAgent: req.headers["user-agent"] || "Browser",
+                status: "SUCCESS"
+            });
+        } catch (logErr) {
+            console.warn("[secureDownloadUserBundle] saveDownloadLog warning:", logErr.message);
+        }
 
         /* --------------------------------------------------
            STREAM
