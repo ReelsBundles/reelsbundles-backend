@@ -296,7 +296,24 @@ app.use(
         allowedHeaders: [
             "Content-Type",
             "Authorization",
-            "X-Requested-With"
+            "X-Requested-With",
+            "Accept",
+            "Origin",
+            "X-Request-Id",
+            "x-request-id",
+            "X-Correlation-Id",
+            "x-correlation-id",
+            "X-RB-Page",
+            "x-rb-page",
+            "X-RB-Source",
+            "x-rb-source",
+            "Cache-Control",
+            "Pragma"
+        ],
+
+        exposedHeaders: [
+            "X-Request-Id",
+            "X-Correlation-Id"
         ]
 
     })
