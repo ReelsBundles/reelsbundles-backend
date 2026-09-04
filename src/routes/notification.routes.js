@@ -1,4 +1,5 @@
 import express from "express";
+import { adminAuth } from "../middleware/auth.middleware.js";
 import {
     handleGetPublicNotifications,
     handleGetAdminNotifications,
@@ -12,10 +13,10 @@ const router = express.Router();
 // Public routes
 router.get("/notifications", handleGetPublicNotifications);
 
-// Admin routes
-router.get("/admin/notifications", handleGetAdminNotifications);
-router.post("/admin/notifications", handleCreateAdminNotification);
-router.put("/admin/notifications/:id", handleUpdateAdminNotification);
-router.delete("/admin/notifications/:id", handleDeleteAdminNotification);
+// Admin routes (Protected by Admin Auth)
+router.get("/admin/notifications", adminAuth, handleGetAdminNotifications);
+router.post("/admin/notifications", adminAuth, handleCreateAdminNotification);
+router.put("/admin/notifications/:id", adminAuth, handleUpdateAdminNotification);
+router.delete("/admin/notifications/:id", adminAuth, handleDeleteAdminNotification);
 
 export default router;
