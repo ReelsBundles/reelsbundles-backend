@@ -581,7 +581,7 @@ export async function verifyUserPage(pageKey, options = {}) {
     for (const ep of pageDef.endpoints) {
         try {
             const url = `${baseUrl}${ep.url}`;
-            const unauthHeaders = {};
+            const unauthHeaders = { "x-rb-test-probe": "true" };
             const unauthRes = await fetch(url, {
                 method: ep.method,
                 headers: unauthHeaders
@@ -787,7 +787,7 @@ export async function verifyAdminPage(pageKey, options = {}) {
     for (const ep of pageDef.endpoints) {
         try {
             const url = `${baseUrl}${ep.url}`;
-            const unauthRes = await fetch(url, { method: ep.method }).catch(() => null);
+            const unauthRes = await fetch(url, { method: ep.method, headers: { "x-rb-test-probe": "true" } }).catch(() => null);
             let epPassed = false;
             let epStatus = unauthRes ? unauthRes.status : 0;
 

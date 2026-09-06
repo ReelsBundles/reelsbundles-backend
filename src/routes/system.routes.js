@@ -30,6 +30,9 @@ router.get("/admin/system/maintenance", adminAuth, getMaintenanceStatus);
 router.put("/admin/system/maintenance", adminAuth, updateMaintenanceStatus);
 router.put("/admin/system/passcode", adminAuth, updateMaintenancePasscode);
 router.post("/admin/system/passcode", adminAuth, updateMaintenancePasscode);
+router.put("/admin/system/maintenance/passcode", adminAuth, updateMaintenancePasscode);
+router.post("/admin/system/maintenance/passcode", adminAuth, updateMaintenancePasscode);
+
 
 // Admin routes to manage Important Alerts
 router.get("/admin/system/important-alerts", adminAuth, handleGetAdminAlerts);

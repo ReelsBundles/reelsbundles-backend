@@ -8,8 +8,9 @@ import {
     deleteCoupon as deleteCouponService
 } from '../services/coupon-storage.service.js';
 
+import { getActiveNotifications } from '../services/notification-storage.service.js';
 import { getPlan } from '../services/payment.service.js';
-import { db } from '../config/firebase.js';
+import { db, isFirestoreAvailable, markFirestoreFailure, markFirestoreSuccess } from '../config/firebase.js';
 
 export const applyCoupon = async (req, res) => {
     try {
@@ -22,7 +23,26 @@ export const applyCoupon = async (req, res) => {
         }
 
         await fetchCouponsAsync();
-        const coupon = getCouponByCode(code);
+        let coupon = getCouponByCode(code);
+        if (!coupon || !coupon.active) {
+            // Check active notifications if created via notification manager
+            const notifs = getActiveNotifications();
+            const matchedNotif = notifs.find(n => 
+                n.type === "coupon" && 
+                n.couponCode && 
+                n.couponCode.toUpperCase() === String(code).trim().toUpperCase()
+            );
+            if (matchedNotif) {
+                coupon = {
+                    code: matchedNotif.couponCode,
+                    discountType: matchedNotif.discountType || "percentage",
+                    discountValue: Number(matchedNotif.discountValue) || 10,
+                    minOrderAmount: 0,
+                    active: true
+                };
+            }
+        }
+
         if (!coupon || !coupon.active) {
             return res.status(200).json({
                 success: false,
@@ -49,8 +69,9 @@ export const applyCoupon = async (req, res) => {
         if (targetType !== 'all') {
             let isExistingUser = false;
             try {
-                if (userEmail || userId) {
+                if ((userEmail || userId) && isFirestoreAvailable()) {
                     const snap = await db.collection("payments").get();
+                    markFirestoreSuccess();
                     snap.forEach(doc => {
                         const data = doc.data() || {};
                         const status = String(data.paymentStatus || data.status || "").toUpperCase();
@@ -65,8 +86,10 @@ export const applyCoupon = async (req, res) => {
                     });
                 }
             } catch (e) {
+                markFirestoreFailure(e);
                 console.warn("[COUPON ELIGIBILITY CHECK WARN]", e.message);
             }
+
 
             // Rule A: Existing User attempting to apply a New Users Only coupon
             if (targetType === 'new_users' && isExistingUser) {

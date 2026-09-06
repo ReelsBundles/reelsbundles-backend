@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { db } from '../config/firebase.js';
+import { db, isFirestoreAvailable, markFirestoreFailure, markFirestoreSuccess } from '../config/firebase.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,8 +32,9 @@ export async function fetchCouponsAsync() {
     let items = getAllCoupons();
 
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             const snapshot = await db.collection("coupons").get();
+            markFirestoreSuccess();
             if (!snapshot.empty) {
                 const remote = [];
                 snapshot.forEach(doc => remote.push({ id: doc.id, ...doc.data() }));
@@ -47,6 +48,7 @@ export async function fetchCouponsAsync() {
             }
         }
     } catch (e) {
+        markFirestoreFailure(e);
         console.warn("[COUPONS] Firestore sync warning:", e?.message);
     }
 
@@ -94,10 +96,12 @@ export async function createCoupon(data) {
     saveCoupons(coupons);
 
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             await db.collection("coupons").doc(newCoupon.id).set(newCoupon);
+            markFirestoreSuccess();
         }
     } catch (e) {
+        markFirestoreFailure(e);
         console.warn("[COUPON] Firestore write warning:", e?.message);
     }
 
@@ -132,10 +136,12 @@ export async function updateCoupon(id, data) {
     saveCoupons(coupons);
 
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             await db.collection("coupons").doc(id).set(coupon, { merge: true });
+            markFirestoreSuccess();
         }
     } catch (e) {
+        markFirestoreFailure(e);
         console.warn("[COUPON] Firestore update warning:", e?.message);
     }
 
@@ -150,10 +156,13 @@ export async function toggleCoupon(id) {
     saveCoupons(coupons);
 
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             await db.collection("coupons").doc(id).update({ active: coupon.active });
+            markFirestoreSuccess();
         }
-    } catch (e) {}
+    } catch (e) {
+        markFirestoreFailure(e);
+    }
 
     return coupon;
 }
@@ -166,10 +175,13 @@ export async function deleteCoupon(id) {
     saveCoupons(coupons);
 
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             await db.collection("coupons").doc(id).delete();
+            markFirestoreSuccess();
         }
-    } catch (e) {}
+    } catch (e) {
+        markFirestoreFailure(e);
+    }
 
     return true;
 }
@@ -183,9 +195,13 @@ export async function incrementCouponUsage(code) {
         saveCoupons(coupons);
 
         try {
-            if (db) {
+            if (isFirestoreAvailable()) {
                 await db.collection("coupons").doc(coupon.id).update({ usageCount: coupon.usageCount });
+                markFirestoreSuccess();
             }
-        } catch (e) {}
+        } catch (e) {
+            markFirestoreFailure(e);
+        }
     }
 }
+

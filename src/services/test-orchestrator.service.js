@@ -238,7 +238,7 @@ export async function runMasterTestSuite(options = {}) {
 
             // Test B1: Missing credentials on protected user endpoint -> 401
             progress("Testing unauthenticated access rejection", 1);
-            const r1 = await fetch(`${baseUrl}/api/user/entitlement`).catch(() => null);
+            const r1 = await fetch(`${baseUrl}/api/user/entitlement`, { headers: { "x-rb-test-probe": "true" } }).catch(() => null);
             const p1 = r1 && r1.status === 401;
             authTests.push({
                 name: "Unauthenticated Request Block (HTTP 401)",
@@ -250,7 +250,7 @@ export async function runMasterTestSuite(options = {}) {
 
             // Test B2: Admin endpoint protection -> 401/403
             progress("Testing admin route protection", 2);
-            const r2 = await fetch(`${baseUrl}/api/admin/orders`).catch(() => null);
+            const r2 = await fetch(`${baseUrl}/api/admin/orders`, { headers: { "x-rb-test-probe": "true" } }).catch(() => null);
             const p2 = r2 && (r2.status === 401 || r2.status === 403);
             authTests.push({
                 name: "Admin Route Credential Enforcement (HTTP 401)",

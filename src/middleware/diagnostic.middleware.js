@@ -85,7 +85,10 @@ function deduceSource(req) {
     }
 
     const path = (req.originalUrl || "").toLowerCase();
-    if (path.startsWith("/api/admin")) return "ADMIN";
+    if (path.startsWith("/api/admin")) {
+        // Authenticated admin requests only; unauthenticated probes are classified as PUBLIC
+        return (req.admin || req.headers["authorization"]) ? "ADMIN" : "PUBLIC";
+    }
     if (path.startsWith("/api/webhook")) return "SYSTEM";
     if (path.startsWith("/api/user") || path.startsWith("/api/payment") || path.startsWith("/api/secure-download") || req.user) return "USER";
     if (path.startsWith("/api/auth")) return "PUBLIC";
@@ -193,6 +196,23 @@ export function diagnosticMiddleware(req, res, next) {
             const userId = req.user?.uid || req.user?.id || req.admin?.id || req.admin?.email || null;
             const userRole = req.admin ? "admin" : (req.user ? "user" : "guest");
 
+            // Detect intentional test probes and expected security defenses
+            const isTestProbe = Boolean(
+                req.headers["x-rb-test-probe"] === "true" ||
+                req.headers["x-rb-probe"] === "true" ||
+                (req.headers["user-agent"] && req.headers["user-agent"].includes("TestOrchestrator"))
+            );
+
+            const isDownloadProbe = (endpoint.includes("/download") || endpoint.includes("/secure-download")) &&
+                (rawUrl.includes("test_token") || rawUrl.includes("contract_check") || rawUrl.includes("invalid_test_token") || rawUrl.includes("test_drive_file_id") || rawUrl.includes("test_mega_file_id"));
+            const isAuthProbe = (res.statusCode === 401 || res.statusCode === 403) && (!userId || userId === "guest");
+
+            const isExpectedRejection = Boolean(
+                isTestProbe ||
+                (res.statusCode === 404 && isDownloadProbe) ||
+                isAuthProbe
+            );
+
             req.diagnostic.addTimeline("Response sent", `HTTP ${res.statusCode}`);
 
             recordRequest({
@@ -214,7 +234,9 @@ export function diagnosticMiddleware(req, res, next) {
                 referer: req.headers["referer"],
                 timeline: req.diagnostic.timeline,
                 backendRoute: endpoint,
-                isFrontendError: false
+                isFrontendError: false,
+                isTestProbe,
+                isExpectedRejection
             });
         } catch (err) {
             // NEVER let telemetry recording break anything

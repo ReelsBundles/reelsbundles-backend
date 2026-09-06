@@ -370,6 +370,10 @@ router.post("/test-event", monitorAdminAuth, (req, res) => {
                 break;
         }
 
+        if (testEntry) {
+            testEntry.isSynthetic = true;
+        }
+
         const recorded = recordRequest(testEntry);
 
         return res.json({

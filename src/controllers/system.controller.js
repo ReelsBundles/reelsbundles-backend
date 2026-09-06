@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { db } from "../config/firebase.js";
+import { db, isFirestoreAvailable, markFirestoreFailure, markFirestoreSuccess } from "../config/firebase.js";
 import { getAggregateReviewStats } from "../services/review-storage.service.js";
 import { loadLocalPayments } from "../services/payment-storage.service.js";
 
@@ -61,10 +61,11 @@ function parseSafeDate(val) {
 }
 
 async function syncWithFirestore(localSettings) {
-    if (!db) return localSettings;
+    if (!isFirestoreAvailable()) return localSettings;
     try {
         const docRef = db.collection("system_settings").doc("maintenance");
         const docSnap = await docRef.get();
+        markFirestoreSuccess();
         if (docSnap.exists) {
             const remoteData = docSnap.data() || {};
             const localTime = new Date(localSettings.updatedAt || 0).getTime();
@@ -78,15 +79,18 @@ async function syncWithFirestore(localSettings) {
             } else if (localTime > remoteTime) {
                 // Local copy is newer: push to Firestore to sync remote
                 docRef.set(localSettings, { merge: true }).catch(err => {
+                    markFirestoreFailure(err);
                     console.warn("[SYSTEM CONTROLLER] Firestore sync write warning:", err?.message);
                 });
             }
         } else {
             docRef.set(localSettings, { merge: true }).catch(err => {
+                markFirestoreFailure(err);
                 console.warn("[SYSTEM CONTROLLER] Firestore seed write warning:", err?.message);
             });
         }
     } catch (e) {
+        markFirestoreFailure(e);
         console.warn("[SYSTEM CONTROLLER] Firestore sync warning:", e?.message);
     }
     return localSettings;
@@ -153,10 +157,12 @@ export const updateMaintenanceStatus = async (req, res) => {
 
         // Save to Firestore Cloud Database
         try {
-            if (db) {
+            if (isFirestoreAvailable()) {
                 await db.collection("system_settings").doc("maintenance").set(updated, { merge: true });
+                markFirestoreSuccess();
             }
         } catch (e) {
+            markFirestoreFailure(e);
             console.warn("[SYSTEM CONTROLLER] Firestore write warning:", e?.message);
         }
 
@@ -192,10 +198,12 @@ export const updateMaintenancePasscode = async (req, res) => {
 
         saveSettingsLocal(updated);
 
-        if (db) {
+        if (isFirestoreAvailable()) {
             try {
                 await db.collection("system_settings").doc("maintenance").set(updated, { merge: true });
+                markFirestoreSuccess();
             } catch (e) {
+                markFirestoreFailure(e);
                 console.warn("[SYSTEM CONTROLLER] Firestore write warning:", e?.message);
             }
         }
