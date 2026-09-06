@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { adminAuth } from "../middleware/auth.middleware.js";
 import {
     applyCoupon,
     getActiveCoupons,
@@ -23,10 +24,10 @@ router.post("/apply-coupon", applyCoupon);
 router.get("/coupons/active", getActiveCoupons);
 
 // Admin coupon management
-router.get("/admin/coupons", listCoupons);
-router.post("/admin/coupons", createCoupon);
-router.put("/admin/coupons/:id", updateCoupon);
-router.put("/admin/coupons/:id/toggle", toggleCoupon);
-router.delete("/admin/coupons/:id", deleteCoupon);
+router.get("/admin/coupons", adminAuth, listCoupons);
+router.post("/admin/coupons", adminAuth, createCoupon);
+router.put("/admin/coupons/:id", adminAuth, updateCoupon);
+router.put("/admin/coupons/:id/toggle", adminAuth, toggleCoupon);
+router.delete("/admin/coupons/:id", adminAuth, deleteCoupon);
 
 export default router;

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { adminAuth } from "../middleware/auth.middleware.js";
 import {
     getPublicDemoVideos,
     listAdminVideos,
@@ -13,9 +14,9 @@ const router = Router();
 router.get("/demo/videos", getPublicDemoVideos);
 
 // Admin endpoints
-router.get("/admin/demo-videos", listAdminVideos);
-router.post("/admin/demo-videos", addVideo);
-router.put("/admin/demo-videos/:id/toggle", toggleVideo);
-router.delete("/admin/demo-videos/:id", deleteVideo);
+router.get("/admin/demo-videos", adminAuth, listAdminVideos);
+router.post("/admin/demo-videos", adminAuth, addVideo);
+router.put("/admin/demo-videos/:id/toggle", adminAuth, toggleVideo);
+router.delete("/admin/demo-videos/:id", adminAuth, deleteVideo);
 
 export default router;

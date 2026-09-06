@@ -228,38 +228,33 @@ export async function getPaymentByTokenHash(
 
     }
 
+    try {
+        if (db) {
+            const snapshot =
+                await db
+                    .collection("payments")
+                    .where(
+                        "downloadTokenHash",
+                        "==",
+                        tokenHash
+                    )
+                    .limit(1)
+                    .get();
 
-    const snapshot =
-        await db
-            .collection("payments")
-            .where(
-                "downloadTokenHash",
-                "==",
-                tokenHash
-            )
-            .limit(1)
-            .get();
-
-
-    if (snapshot.empty) {
-
-        return null;
-
+            if (!snapshot.empty) {
+                const doc = snapshot.docs[0];
+                return {
+                    id: doc.id,
+                    ...doc.data()
+                };
+            }
+        }
+    } catch (err) {
+        console.warn("[PAYMENT STORAGE] Firestore getPaymentByTokenHash fallback:", err.message);
     }
 
-
-    const doc =
-        snapshot.docs[0];
-
-
-    return {
-
-        id:
-            doc.id,
-
-        ...doc.data()
-
-    };
+    const localPayments = loadLocalPayments();
+    return localPayments.find(p => p.downloadTokenHash === tokenHash) || null;
 
 }
 

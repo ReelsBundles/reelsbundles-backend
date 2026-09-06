@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
     getMaintenanceStatus,
     updateMaintenanceStatus,
+    updateMaintenancePasscode,
     verifyMaintenancePin,
     getPublicStats
 } from "../controllers/system.controller.js";
@@ -24,8 +25,11 @@ router.post("/system/verify-pin", verifyMaintenancePin);
 // Public route for active Important Alerts
 router.get("/system/important-alerts", handleGetPublicAlerts);
 
-// Admin route to manage maintenance telemetry
+// Admin routes to manage maintenance telemetry & passcode
+router.get("/admin/system/maintenance", adminAuth, getMaintenanceStatus);
 router.put("/admin/system/maintenance", adminAuth, updateMaintenanceStatus);
+router.put("/admin/system/passcode", adminAuth, updateMaintenancePasscode);
+router.post("/admin/system/passcode", adminAuth, updateMaintenancePasscode);
 
 // Admin routes to manage Important Alerts
 router.get("/admin/system/important-alerts", adminAuth, handleGetAdminAlerts);

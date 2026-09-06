@@ -4,6 +4,7 @@
 ========================================================== */
 
 import { db } from "../config/firebase.js";
+import { loadLocalPayments, saveLocalPayments, deletePayment } from "./payment-storage.service.js";
 
 
 /* ==========================================================
@@ -38,30 +39,35 @@ export async function getOrders(options = {}) {
        GET ALL PAYMENTS
     ------------------------------------------------------ */
 
-    const snapshot =
-        await db
-            .collection("payments")
-            .get();
-
-
     let orders = [];
+    let fetchedFromDb = false;
 
+    try {
+        if (db) {
+            const snapshot =
+                await db
+                    .collection("payments")
+                    .get();
 
-    snapshot.forEach((doc) => {
+            snapshot.forEach((doc) => {
+                const data = doc.data() || {};
+                orders.push({
+                    id: doc.id,
+                    ...data
+                });
+            });
+            fetchedFromDb = true;
+        }
+    } catch (err) {
+        console.warn("[ORDER SERVICE] Firestore getOrders warning (fallback to local):", err.message);
+    }
 
-        const data =
-            doc.data() || {};
-
-
-        orders.push({
-
-            id: doc.id,
-
-            ...data
-
-        });
-
-    });
+    if (!fetchedFromDb || orders.length === 0) {
+        const localPayments = loadLocalPayments();
+        if (localPayments.length > 0) {
+            orders = [...localPayments];
+        }
+    }
 
 
     /* ------------------------------------------------------
@@ -357,19 +363,33 @@ export async function deleteOrder(orderId) {
         throw new Error("Order ID is required.");
     }
 
-    const docRef = db
-        .collection("payments")
-        .doc(orderId);
+    let deletedLocally = false;
+    try {
+        deletedLocally = deletePayment(orderId);
+    } catch (e) {}
 
-    const doc = await docRef.get();
+    try {
+        if (db) {
+            const docRef = db
+                .collection("payments")
+                .doc(orderId);
 
-    if (!doc.exists) {
-        throw new Error("Order not found.");
+            const doc = await docRef.get();
+
+            if (doc.exists) {
+                await docRef.delete();
+                return true;
+            }
+        }
+    } catch (err) {
+        console.warn("[ORDER SERVICE] Firestore deleteOrder warning:", err.message);
     }
 
-    await docRef.delete();
+    if (deletedLocally) {
+        return true;
+    }
 
-    return true;
+    throw new Error("Order not found.");
 }
 
 
@@ -379,25 +399,33 @@ export async function deleteOrder(orderId) {
 
 export async function deleteAllOrders() {
 
-    const snapshot = await db
-        .collection("payments")
-        .get();
+    let deletedCount = 0;
+    try {
+        const localList = loadLocalPayments();
+        deletedCount = localList.length;
+        saveLocalPayments([]);
+    } catch (e) {}
 
-    if (snapshot.empty) {
-        return {
-            deletedCount: 0
-        };
+    try {
+        if (db) {
+            const snapshot = await db
+                .collection("payments")
+                .get();
+
+            if (!snapshot.empty) {
+                const batch = db.batch();
+                snapshot.forEach((doc) => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+                deletedCount = Math.max(deletedCount, snapshot.size);
+            }
+        }
+    } catch (err) {
+        console.warn("[ORDER SERVICE] Firestore deleteAllOrders warning:", err.message);
     }
 
-    const batch = db.batch();
-
-    snapshot.forEach((doc) => {
-        batch.delete(doc.ref);
-    });
-
-    await batch.commit();
-
     return {
-        deletedCount: snapshot.size
+        deletedCount
     };
 }

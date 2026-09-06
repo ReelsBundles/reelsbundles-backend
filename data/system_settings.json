@@ -1,9 +1,9 @@
 {
   "maintenance": false,
-  "message": "🛠️ ReelsBundles is currently undergoing scheduled system upgrades. We will be back online shortly!",
+  "message": "System operational.",
   "expectedBack": null,
   "showTimer": true,
   "testerPasscode": "5796",
   "bypassKey": "RB_TESTER_KEY_5796",
-  "updatedAt": "2026-08-30T10:56:00.000Z"
+  "updatedAt": "2026-09-06T10:17:36.601Z"
 }

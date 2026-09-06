@@ -4,6 +4,7 @@
 ========================================================== */
 
 import express from "express";
+import { adminAuth } from "../middleware/auth.middleware.js";
 
 import {
     listOrders,
@@ -14,6 +15,8 @@ import {
 
 const router =
     express.Router();
+
+router.use(adminAuth);
 
 
 /* ==========================================================

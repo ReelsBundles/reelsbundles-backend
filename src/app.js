@@ -24,6 +24,7 @@ import notificationRoutes from "./routes/notification.routes.js";
 import systemRoutes from "./routes/system.routes.js";
 import reviewRoutes from "./routes/review.routes.js";
 import diagnosticRoutes, { clientMonitorRoutes } from "./routes/diagnostic.routes.js";
+import testSuiteRoutes from "./routes/test-suite.routes.js";
 import { diagnosticMiddleware } from "./middleware/diagnostic.middleware.js";
 
 import "./config/env.js";
@@ -559,6 +560,16 @@ app.use(
 app.use(
     "/api/admin/monitor",
     diagnosticRoutes
+);
+
+app.use(
+    "/api/admin/test",
+    testSuiteRoutes
+);
+
+app.use(
+    "/api/admin/health",
+    testSuiteRoutes
 );
 
 app.use(

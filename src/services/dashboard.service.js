@@ -1,22 +1,61 @@
 import { db } from "../config/firebase.js";
+import { loadLocalPayments } from "./payment-storage.service.js";
+import { getLocalDownloadLogs } from "./download-log.service.js";
+import { loadLocalBundles } from "./bundle.service.js";
+import { getAllUsers } from "./user-storage.service.js";
 
 export async function getDashboardStats() {
-    const paymentsRef = db.collection("payments");
-    const downloadsRef = db.collection("download_logs");
-    const bundlesRef = db.collection("bundles");
-    const usersRef = db.collection("users");
+    let payments = [];
+    let downloads = [];
+    let bundles = [];
+    let users = [];
 
-    const [
-        paymentsSnap,
-        downloadsSnap,
-        bundlesSnap,
-        usersSnap
-    ] = await Promise.all([
-        paymentsRef.get(),
-        downloadsRef.get(),
-        bundlesRef.get(),
-        usersRef.get()
-    ]);
+    let fetchedFromDb = false;
+    try {
+        if (db) {
+            const paymentsRef = db.collection("payments");
+            const downloadsRef = db.collection("download_logs");
+            const bundlesRef = db.collection("bundles");
+            const usersRef = db.collection("users");
+
+            const [
+                paymentsSnap,
+                downloadsSnap,
+                bundlesSnap,
+                usersSnap
+            ] = await Promise.all([
+                paymentsRef.get(),
+                downloadsRef.get(),
+                bundlesRef.get(),
+                usersRef.get()
+            ]);
+
+            payments = paymentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            downloads = downloadsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            bundles = bundlesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            users = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            fetchedFromDb = true;
+        }
+    } catch (err) {
+        console.warn("[DASHBOARD SERVICE] Firestore getDashboardStats warning (fallback to local):", err.message);
+    }
+
+    if (!fetchedFromDb || payments.length === 0) {
+        const localP = loadLocalPayments();
+        if (localP.length > 0) payments = localP;
+    }
+    if (!fetchedFromDb || downloads.length === 0) {
+        const localD = getLocalDownloadLogs();
+        if (localD.length > 0) downloads = localD;
+    }
+    if (!fetchedFromDb || bundles.length === 0) {
+        const localB = loadLocalBundles();
+        if (localB.length > 0) bundles = localB;
+    }
+    if (!fetchedFromDb || users.length === 0) {
+        const localU = getAllUsers();
+        if (localU.length > 0) users = localU;
+    }
 
     let revenue = 0;
     let paidOrdersCount = 0;
@@ -24,13 +63,11 @@ export async function getDashboardStats() {
     const recentDownloadsList = [];
 
     // Sort payments desc
-    const sortedPayments = paymentsSnap.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => {
-            const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
-            const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
-            return timeB - timeA;
-        });
+    const sortedPayments = [...payments].sort((a, b) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+        return timeB - timeA;
+    });
 
     sortedPayments.forEach(data => {
         const isPaid = String(data.paymentStatus || data.status || "").toUpperCase() === "PAID" || String(data.paymentStatus || data.status || "").toUpperCase() === "SUCCESS";
@@ -53,13 +90,11 @@ export async function getDashboardStats() {
     });
 
     // Sort downloads desc
-    const sortedDownloads = downloadsSnap.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => {
-            const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
-            const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
-            return timeB - timeA;
-        });
+    const sortedDownloads = [...downloads].sort((a, b) => {
+        const timeA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : new Date(a.createdAt || 0).getTime();
+        const timeB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : new Date(b.createdAt || 0).getTime();
+        return timeB - timeA;
+    });
 
     sortedDownloads.slice(0, 5).forEach(data => {
         recentDownloadsList.push({
@@ -73,12 +108,12 @@ export async function getDashboardStats() {
     });
 
     return {
-        orders: paymentsSnap.size,
+        orders: payments.length,
         paidOrders: paidOrdersCount,
         revenue,
-        downloads: downloadsSnap.size,
-        bundles: bundlesSnap.size,
-        users: usersSnap.size,
+        downloads: downloads.length,
+        bundles: bundles.length,
+        users: users.length,
         recentOrders: recentOrdersList,
         recentDownloads: recentDownloadsList
     };

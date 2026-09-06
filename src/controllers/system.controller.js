@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { db } from "../config/firebase.js";
 import { getAggregateReviewStats } from "../services/review-storage.service.js";
+import { loadLocalPayments } from "../services/payment-storage.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,41 +60,64 @@ function parseSafeDate(val) {
     }
 }
 
+async function syncWithFirestore(localSettings) {
+    if (!db) return localSettings;
+    try {
+        const docRef = db.collection("system_settings").doc("maintenance");
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+            const remoteData = docSnap.data() || {};
+            const localTime = new Date(localSettings.updatedAt || 0).getTime();
+            const remoteTime = new Date(remoteData.updatedAt || 0).getTime();
+
+            if (remoteTime > localTime) {
+                // Remote Firestore data is strictly newer: adopt remote
+                const merged = { ...localSettings, ...remoteData };
+                saveSettingsLocal(merged);
+                return merged;
+            } else if (localTime > remoteTime) {
+                // Local copy is newer: push to Firestore to sync remote
+                docRef.set(localSettings, { merge: true }).catch(err => {
+                    console.warn("[SYSTEM CONTROLLER] Firestore sync write warning:", err?.message);
+                });
+            }
+        } else {
+            docRef.set(localSettings, { merge: true }).catch(err => {
+                console.warn("[SYSTEM CONTROLLER] Firestore seed write warning:", err?.message);
+            });
+        }
+    } catch (e) {
+        console.warn("[SYSTEM CONTROLLER] Firestore sync warning:", e?.message);
+    }
+    return localSettings;
+}
+
 export const getMaintenanceStatus = async (req, res) => {
     try {
         let settings = loadSettingsLocal();
-
-        // Sync with cloud Firestore to prevent Render restart/reset wiping maintenance mode
-        try {
-            if (db) {
-                const docRef = db.collection("system_settings").doc("maintenance");
-                const docSnap = await docRef.get();
-                if (docSnap.exists) {
-                    const remoteData = docSnap.data();
-                    // Prioritize remote custom passcode if set
-                    settings = {
-                        ...settings,
-                        ...remoteData
-                    };
-                    saveSettingsLocal(settings);
-                }
-            }
-        } catch (e) {
-            console.warn("[SYSTEM CONTROLLER] Firestore sync warning:", e?.message);
-        }
+        settings = await syncWithFirestore(settings);
 
         const passcode = settings.testerPasscode || "5796";
         const key = settings.bypassKey || `RB_TESTER_KEY_${passcode}`;
 
-        return res.json({
+        // Check if request is from an authenticated admin
+        const isAdmin = Boolean(req.admin || req.headers.authorization);
+
+        const responsePayload = {
             success: true,
             maintenance: Boolean(settings.maintenance),
             message: settings.message || "🛠️ System Maintenance in progress.",
             expectedBack: settings.expectedBack || null,
-            showTimer: settings.showTimer !== false,
-            testerPasscode: passcode,
-            bypassKey: key
-        });
+            showTimer: settings.showTimer !== false
+        };
+
+        // Only include testerPasscode and bypassKey if requester is authenticated admin
+        if (isAdmin) {
+            responsePayload.testerPasscode = passcode;
+            responsePayload.bypassKey = key;
+        }
+
+        return res.json(responsePayload);
     } catch (err) {
         return res.status(500).json({
             success: false,
@@ -106,9 +130,12 @@ export const getMaintenanceStatus = async (req, res) => {
 export const updateMaintenanceStatus = async (req, res) => {
     try {
         const current = loadSettingsLocal();
-        const { maintenance, message, expectedBack, showTimer, testerPasscode, bypassKey } = req.body || {};
-        const passcode = testerPasscode !== undefined ? String(testerPasscode).trim() : (current.testerPasscode || "5796");
-        const key = bypassKey !== undefined ? String(bypassKey).trim() : `RB_TESTER_KEY_${passcode}`;
+        const { maintenance, message, expectedBack, showTimer, testerPasscode, passcode: altPasscode, pin } = req.body || {};
+        const incomingPasscode = testerPasscode ?? altPasscode ?? pin;
+        const passcode = incomingPasscode !== undefined && String(incomingPasscode).trim() !== ""
+            ? String(incomingPasscode).trim()
+            : (current.testerPasscode || "5796");
+        const key = `RB_TESTER_KEY_${passcode}`;
 
         const updated = {
             ...current,
@@ -121,10 +148,10 @@ export const updateMaintenanceStatus = async (req, res) => {
             updatedAt: new Date().toISOString()
         };
 
-        // Save locally
+        // Save locally first
         saveSettingsLocal(updated);
 
-        // Save to Firestore Cloud Database so it NEVER resets on Render server restart
+        // Save to Firestore Cloud Database
         try {
             if (db) {
                 await db.collection("system_settings").doc("maintenance").set(updated, { merge: true });
@@ -146,25 +173,58 @@ export const updateMaintenanceStatus = async (req, res) => {
     }
 };
 
+export const updateMaintenancePasscode = async (req, res) => {
+    try {
+        const current = loadSettingsLocal();
+        const incomingPasscode = req.body?.testerPasscode ?? req.body?.passcode ?? req.body?.pin;
+        if (!incomingPasscode || String(incomingPasscode).trim() === "") {
+            return res.status(400).json({ success: false, message: "Passcode (PIN) is required." });
+        }
+        const passcode = String(incomingPasscode).trim();
+        const key = `RB_TESTER_KEY_${passcode}`;
+
+        const updated = {
+            ...current,
+            testerPasscode: passcode,
+            bypassKey: key,
+            updatedAt: new Date().toISOString()
+        };
+
+        saveSettingsLocal(updated);
+
+        if (db) {
+            try {
+                await db.collection("system_settings").doc("maintenance").set(updated, { merge: true });
+            } catch (e) {
+                console.warn("[SYSTEM CONTROLLER] Firestore write warning:", e?.message);
+            }
+        }
+
+        return res.json({
+            success: true,
+            message: "Maintenance passcode updated successfully.",
+            settings: {
+                testerPasscode: passcode,
+                bypassKey: key,
+                updatedAt: updated.updatedAt
+            }
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
 export const verifyMaintenancePin = async (req, res) => {
     try {
         let settings = loadSettingsLocal();
-        try {
-            if (db) {
-                const docRef = db.collection("system_settings").doc("maintenance");
-                const docSnap = await docRef.get();
-                if (docSnap.exists) {
-                    settings = { ...settings, ...docSnap.data() };
-                }
-            }
-        } catch (e) {}
+        settings = await syncWithFirestore(settings);
 
         const activePin = String(settings.testerPasscode || "5796").trim();
         const activeKey = String(settings.bypassKey || `RB_TESTER_KEY_${activePin}`).trim();
-        const inputPin = String(req.body?.pin || "").trim();
+        const inputPin = String(req.body?.pin || req.body?.passcode || "").trim();
 
         if (inputPin && (inputPin === activePin || inputPin === activeKey || inputPin === `RB_TESTER_KEY_${activePin}`)) {
-            return res.json({ success: true, valid: true, passcode: activePin });
+            return res.json({ success: true, valid: true });
         }
         return res.json({ success: true, valid: false });
     } catch (err) {
@@ -193,15 +253,24 @@ export const getPublicStats = async (req, res) => {
             console.warn("[PUBLIC STATS WARN]", e?.message);
         }
 
+        if (paidCount === 0) {
+            const localPayments = loadLocalPayments();
+            localPayments.forEach(data => {
+                const status = String(data.paymentStatus || data.status || "").toUpperCase();
+                if (["PAID", "SUCCESS", "COMPLETED", "CAPTURED"].includes(status)) {
+                    paidCount++;
+                }
+            });
+        }
+
         const reviewStats = await getAggregateReviewStats().catch(() => ({
-            totalReviews: 1250,
-            averageRating: 4.9,
-            satisfactionPercentage: 99
+            totalReviews: 0,
+            averageRating: 0,
+            satisfactionPercentage: 0
         }));
 
-        const baseCount = 10000;
-        const totalCustomersCount = baseCount + paidCount + (reviewStats.totalReviews || 0);
-        const totalCustomersFormatted = (totalCustomersCount / 1000).toFixed(1) + "K+";
+        const totalCustomersCount = paidCount;
+        const totalCustomersFormatted = String(totalCustomersCount);
 
         return res.json({
             success: true,
@@ -210,10 +279,10 @@ export const getPublicStats = async (req, res) => {
                 readyReelsCount: 200000,
                 happyCustomers: totalCustomersFormatted,
                 happyCustomersCount: totalCustomersCount,
-                satisfaction: `${reviewStats.satisfactionPercentage || 99}%`,
-                satisfactionPercentage: reviewStats.satisfactionPercentage || 99,
-                averageRating: reviewStats.averageRating || 4.9,
-                totalReviews: reviewStats.totalReviews || 1250,
+                satisfaction: `${reviewStats.satisfactionPercentage}%`,
+                satisfactionPercentage: reviewStats.satisfactionPercentage,
+                averageRating: reviewStats.averageRating,
+                totalReviews: reviewStats.totalReviews,
                 support: "24/7",
                 liveSynced: true,
                 totalPaidOrders: paidCount
@@ -224,11 +293,12 @@ export const getPublicStats = async (req, res) => {
             success: true,
             stats: {
                 readyReels: "200K+",
-                happyCustomers: "10.0K+",
-                happyCustomersCount: 10000,
-                satisfaction: "99%",
-                averageRating: 4.9,
-                totalReviews: 1250,
+                happyCustomers: "0",
+                happyCustomersCount: 0,
+                satisfaction: "0%",
+                satisfactionPercentage: 0,
+                averageRating: 0,
+                totalReviews: 0,
                 support: "24/7",
                 liveSynced: false
             }

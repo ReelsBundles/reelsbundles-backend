@@ -1,4 +1,5 @@
 import express from "express";
+import { adminAuth } from "../middleware/auth.middleware.js";
 import {
     handleSyncUser,
     handleGetUserStatus,
@@ -16,10 +17,10 @@ router.post("/users/sync", handleSyncUser);
 router.get("/user/status", handleGetUserStatus);
 
 // Admin user management endpoints
-router.get("/admin/users", handleGetAdminUsers);
-router.delete("/admin/users/all", handleDeleteAllAdminUsers);
-router.delete("/admin/users-all", handleDeleteAllAdminUsers);
-router.delete("/admin/users/:userId", handleDeleteAdminUser);
-router.put("/admin/users/:userId/toggle-status", handleToggleAdminUserStatus);
+router.get("/admin/users", adminAuth, handleGetAdminUsers);
+router.delete("/admin/users/all", adminAuth, handleDeleteAllAdminUsers);
+router.delete("/admin/users-all", adminAuth, handleDeleteAllAdminUsers);
+router.delete("/admin/users/:userId", adminAuth, handleDeleteAdminUser);
+router.put("/admin/users/:userId/toggle-status", adminAuth, handleToggleAdminUserStatus);
 
 export default router;

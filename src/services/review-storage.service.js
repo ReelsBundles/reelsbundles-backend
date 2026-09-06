@@ -156,9 +156,9 @@ export async function getAggregateReviewStats() {
     const list = await getApprovedReviews();
     if (list.length === 0) {
         return {
-            totalReviews: 1250,
-            averageRating: 4.9,
-            satisfactionPercentage: 99
+            totalReviews: 0,
+            averageRating: 0,
+            satisfactionPercentage: 0
         };
     }
 
@@ -169,8 +169,8 @@ export async function getAggregateReviewStats() {
     const satisfaction = Math.round((positiveCount / total) * 100);
 
     return {
-        totalReviews: 1250 + total,
-        averageRating: Math.max(4.5, Math.min(5.0, avg)),
-        satisfactionPercentage: Math.max(95, Math.min(100, satisfaction))
+        totalReviews: total,
+        averageRating: Math.max(1.0, Math.min(5.0, avg)),
+        satisfactionPercentage: Math.max(0, Math.min(100, satisfaction))
     };
 }

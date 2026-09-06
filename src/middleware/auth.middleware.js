@@ -163,26 +163,7 @@ export const firebaseUserAuth = async (req, res, next) => {
         if (prevSession) {
             if (now - prevSession.timestamp < 10 * 60 * 1000) {
                 if (prevSession.ip !== currentIp && prevSession.userAgent !== currentUserAgent) {
-                    console.warn(`[Suspicious Activity] Account sharing detected for UID: ${userId}. IP: ${prevSession.ip} -> ${currentIp}, User-Agent: ${prevSession.userAgent} -> ${currentUserAgent}`);
-                    
-                    try {
-                        if (db) {
-                            await db.collection("users").doc(userId).set({
-                                locked: true,
-                                status: "SUSPENDED",
-                                suspendedAt: new Date(),
-                                suspensionReason: `Simultaneous logins detected. IP1: ${prevSession.ip}, IP2: ${currentIp}`
-                            }, { merge: true });
-                        }
-                    } catch (e) {}
-
-                    activeSessions.delete(userId);
-
-                    return res.status(403).json({
-                        success: false,
-                        suspended: true,
-                        message: "Account suspended due to suspicious sharing detection."
-                    });
+                    console.info(`[Session Telemetry] IP or User-Agent transition observed for UID: ${userId} (${prevSession.ip} -> ${currentIp}). Session updated safely.`);
                 }
             }
         }
