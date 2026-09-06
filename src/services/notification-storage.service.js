@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { db, isFirestoreAvailable, markFirestoreFailure, markFirestoreSuccess } from "../config/firebase.js";
-import { getAllCoupons, getCouponByCode, createCoupon } from "./coupon-storage.service.js";
+import { getCouponByCode, createCoupon } from "./coupon-storage.service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,47 +73,13 @@ export function getActiveNotifications() {
     const list = loadNotifications();
     const now = new Date();
 
-    // 1. Filter active announcements and custom notifications
+    // Filter active announcements and custom notifications created by Admin
     // NOTE: An item NEVER expires unless an explicit expiresAt date is specified in the past
-    const activeList = list.filter(item => {
+    return list.filter(item => {
         if (item.active === false) return false;
         if (item.expiresAt && new Date(item.expiresAt) < now) return false;
         return true;
     });
-
-    // 2. Unify with active coupon offers from coupon store so public ticker and feeds surface all active offers
-    try {
-        const coupons = getAllCoupons();
-        const activeCoupons = coupons.filter(c => {
-            if (c.active === false) return false;
-            if (c.expiryDate && new Date(c.expiryDate) < now) return false;
-            if (c.maxUses && (c.usageCount || 0) >= c.maxUses) return false;
-            return true;
-        });
-
-        for (const c of activeCoupons) {
-            const exists = activeList.some(n => 
-                n.type === "coupon" && 
-                String(n.couponCode || "").toUpperCase() === String(c.code).toUpperCase()
-            );
-            if (!exists) {
-                activeList.push({
-                    id: `coupon_offer_${c.code}`,
-                    title: c.userBadge || "Special Discount Offer",
-                    message: c.description || (c.discountType === "percentage" ? `Get ${c.discountValue}% OFF on your bundle order!` : `Get ₹${c.discountValue} FLAT OFF!`),
-                    type: "coupon",
-                    couponCode: c.code,
-                    targetAudience: c.eligibleUserType || "all",
-                    active: true,
-                    createdAt: c.createdAt || new Date().toISOString()
-                });
-            }
-        }
-    } catch (e) {
-        console.warn("[NOTIFICATION STORAGE] Coupon unification warning:", e.message);
-    }
-
-    return activeList;
 }
 
 export function getAllNotifications() {

@@ -103,23 +103,32 @@ async function runPersistenceTestSuite() {
             assert.strictEqual(found.discountValue, 20);
         });
 
-        // --- TEST 3: Unified GET /api/notifications surfaces both announcements & active coupons ---
-        await test("3. GET /api/notifications returns unified announcements and coupon offers", async () => {
+        // --- TEST 3: GET /api/notifications surfaces both announcements & coupon notifications ---
+        await test("3. GET /api/notifications returns published announcements and coupon notifications", async () => {
+            await createNotification({
+                title: "Flash Coupon Offer",
+                message: "Save 20% on any bundle with PERSIST99",
+                type: "coupon",
+                couponCode: "PERSIST99",
+                discountValue: 20,
+                active: true
+            });
+
             const res = await fetch(`${baseUrl}/api/notifications`);
             assert.strictEqual(res.status, 200);
             const data = await res.json();
             assert.strictEqual(data.success, true);
-            assert.ok(data.notifications.length >= 2, "Expected at least 2 unified items");
+            assert.ok(data.notifications.length >= 2, "Expected at least 2 items");
 
             const foundAnnounce = data.notifications.find(n => n.title === "Flash Sale Alert");
             assert.ok(foundAnnounce, "Active announcement must be present in public feed");
 
             const foundCouponOffer = data.notifications.find(n => n.type === "coupon" && n.couponCode === "PERSIST99");
-            assert.ok(foundCouponOffer, "Active coupon PERSIST99 must be unified as a coupon offer in public feed");
+            assert.ok(foundCouponOffer, "Active coupon PERSIST99 must be present in public feed");
         });
 
         // --- TEST 4: Items without explicit expiry NEVER expire (> 24 hours) ---
-        await test("4. Announcements and coupons without explicit expiry never expire", async () => {
+        await test("4. Announcements and notifications without explicit expiry never expire", async () => {
             const activeList = getActiveNotifications();
             const flashSale = activeList.find(n => n.title === "Flash Sale Alert");
             assert.ok(flashSale, "Announcement must still be active");
