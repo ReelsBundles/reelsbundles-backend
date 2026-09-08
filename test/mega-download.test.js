@@ -100,7 +100,8 @@ async function runTests() {
     try {
         // Setup persistent test bundles
         const initialBundles = loadLocalBundles();
-        saveLocalBundles([BUNDLE_BASIC_MEGA, BUNDLE_PREMIUM_MEGA, ...initialBundles]);
+        const nonMegaBundles = initialBundles.filter(b => b.id !== BUNDLE_BASIC_MEGA.id && b.id !== BUNDLE_PREMIUM_MEGA.id);
+        saveLocalBundles([...nonMegaBundles, BUNDLE_BASIC_MEGA, BUNDLE_PREMIUM_MEGA]);
 
         // ----------------------------------------------------
         // 1. Authentication Security Checks (HTTP 401)

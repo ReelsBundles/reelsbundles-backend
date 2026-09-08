@@ -1009,7 +1009,11 @@ export function runProductionDataAudit() {
         "bundles.json",
         "notifications.json",
         "system_settings.json",
-        "payments.json"
+        "payments.json",
+        "demo-videos.json",
+        "users.json",
+        "coupons.json",
+        "download_logs.json"
     ];
 
     const forbiddenStrings = [
@@ -1018,7 +1022,8 @@ export function runProductionDataAudit() {
         "placeholder",
         "sample customer",
         "10000 creators",
-        "1250 reviews"
+        "1250 reviews",
+        "Crucial System Upgrade"
     ];
 
     for (const fileName of filesToAudit) {

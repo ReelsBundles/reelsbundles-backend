@@ -185,7 +185,8 @@ router.post("/audit/run", testAuthWrapper, (req, res) => {
         const report = runProductionDataAudit();
         return res.json({
             success: true,
-            audit: report
+            audit: report,
+            auditResult: report
         });
     } catch (err) {
         return res.status(500).json({
