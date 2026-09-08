@@ -27,6 +27,13 @@ function checkWhitespace(raw) {
     };
 }
 
+export function normalizePhoneNumber(raw) {
+    if (!raw) return "";
+    const digits = String(raw).replace(/\D/g, "");
+    if (digits.length >= 10) return digits.slice(-10);
+    return digits;
+}
+
 export function getUroPayConfig() {
     const rawEnv = (process.env.UROPAY_ENV || "TEST").toUpperCase().trim();
 
@@ -125,15 +132,9 @@ export async function createUroPayOrder(orderData) {
     }
 
     if (!creds.apiKey || !creds.apiSecret) {
-        console.warn(`[UroPay Service WARN] API Credentials missing in environment. Returning fallback test order URL.`);
-        const testOrderId = `uropay_order_${Date.now()}`;
-        return {
-            id: testOrderId,
-            tenantOrderRef: String(orderData.tenantOrderRef || orderData.orderId),
-            amount: targetAmount,
-            status: "PAID",
-            openUrl: orderData.returnUrl || `https://reelsbundles.github.io/success.html?order_id=${encodeURIComponent(orderData.tenantOrderRef || testOrderId)}`
-        };
+        const err = new Error("UroPay payment gateway credentials are not configured on the server.");
+        err.statusCode = 503;
+        throw err;
     }
 
     const path = "/v1/orders";
@@ -143,8 +144,13 @@ export async function createUroPayOrder(orderData) {
         currency: orderData.currency || "INR"
     };
 
-    if (orderData.customerEmail) bodyObj.customerEmail = orderData.customerEmail;
-    if (orderData.customerPhone) bodyObj.customerPhone = orderData.customerPhone;
+    if (orderData.customerEmail) {
+        bodyObj.customerEmail = String(orderData.customerEmail).trim().toLowerCase();
+    }
+    if (orderData.customerPhone) {
+        const digits = String(orderData.customerPhone).replace(/\D/g, "");
+        bodyObj.customerPhone = digits.length >= 10 ? digits.slice(-10) : "9999999999";
+    }
     if (orderData.returnUrl) bodyObj.returnUrl = orderData.returnUrl;
     if (orderData.webhookUrl) bodyObj.webhookUrl = orderData.webhookUrl;
     if (orderData.metaData) bodyObj.metaData = orderData.metaData;

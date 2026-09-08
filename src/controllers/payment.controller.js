@@ -12,7 +12,8 @@ import {
 import {
     savePayment,
     getPayment,
-    updatePayment
+    updatePayment,
+    loadLocalPayments
 } from "../services/payment-storage.service.js";
 
 import {
@@ -27,14 +28,14 @@ import {
     incrementCouponUsage
 } from "../services/coupon-storage.service.js";
 
-import { db } from "../config/firebase.js";
+import { db, isFirestoreAvailable } from "../config/firebase.js";
 
 /* ==========================================================
    CREATE PAYMENT ORDER
 ========================================================== */
 export const createOrder = async (req, res) => {
     try {
-        const { plan, fullName, phone, couponCode } = req.body;
+        const { plan, fullName, phone, couponCode, amount, userId } = req.body;
 
         if (!req.user?.uid) {
             return res.status(401).json({
@@ -43,15 +44,23 @@ export const createOrder = async (req, res) => {
             });
         }
 
+        // Anti-Tampering: Reject client attempt to override server-derived user identity
+        if (userId && String(userId) !== String(req.user.uid)) {
+            return res.status(400).json({
+                success: false,
+                message: "User identity manipulation detected."
+            });
+        }
+
         const selectedPlan = getPlan(plan);
         if (!selectedPlan) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid plan selected."
+                message: "Invalid plan selected. Only 'basic' and 'premium' are supported."
             });
         }
 
-        let baseAmount = Number(selectedPlan.amount || selectedPlan.price || 49);
+        let baseAmount = Number(selectedPlan.amount || 49);
         let finalAmount = baseAmount;
         let appliedCoupon = null;
 
@@ -71,17 +80,23 @@ export const createOrder = async (req, res) => {
                     let isExistingUser = false;
                     try {
                         const userEmail = req.user.email || req.body?.email || "";
-                        const userId = req.user.uid || "";
-                        if (userEmail || userId) {
-                            const snap = await db.collection("payments").get();
-                            snap.forEach(doc => {
-                                const data = doc.data() || {};
+                        const uid = req.user.uid || "";
+                        if (userEmail || uid) {
+                            let docsList = [];
+                            if (isFirestoreAvailable()) {
+                                const snap = await db.collection("payments").get();
+                                snap.forEach(doc => docsList.push(doc.data() || {}));
+                            } else {
+                                docsList = loadLocalPayments();
+                            }
+
+                            docsList.forEach(data => {
                                 const status = String(data.paymentStatus || data.status || "").toUpperCase();
                                 if (["PAID", "SUCCESS", "COMPLETED"].includes(status)) {
                                     if (userEmail && String(data.customerEmail || data.email || "").toLowerCase() === String(userEmail).toLowerCase()) {
                                         isExistingUser = true;
                                     }
-                                    if (userId && String(data.userUid || data.userId || "").toLowerCase() === String(userId).toLowerCase()) {
+                                    if (uid && String(data.userUid || data.userId || "").toLowerCase() === String(uid).toLowerCase()) {
                                         isExistingUser = true;
                                     }
                                 }
@@ -124,12 +139,22 @@ export const createOrder = async (req, res) => {
             }
         }
 
+        // Anti-Tampering: Reject client attempt to supply manipulated price
+        if (amount !== undefined && Number(amount) !== finalAmount) {
+            return res.status(400).json({
+                success: false,
+                message: `Tampered payment amount detected. Expected ₹${finalAmount}, received ₹${amount}.`
+            });
+        }
+
         const order = generateOrder(selectedPlan);
         order.order_amount = finalAmount;
         order.customer_id = `user_${req.user.uid.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40)}`;
         order.customer_name = fullName ? String(fullName).replace(/[^a-zA-Z0-9\s._-]/g, "").trim().slice(0, 50) || "Customer" : "Customer";
         order.customer_email = req.user.email || req.body?.email || "customer@reelsbundles.com";
-        order.customer_phone = phone || req.body?.phone || "9999999999";
+
+        const digits = String(phone || req.body?.phone || "").replace(/\D/g, "");
+        order.customer_phone = digits.length >= 10 ? digits.slice(-10) : "9999999999";
 
         /* --------------------------------------------------
            CHECK EXISTING PAYMENT (IDEMPOTENCY)
@@ -245,7 +270,7 @@ export const verifyOrder = async (req, res) => {
             });
         }
 
-        const { orderId } = req.params;
+        const orderId = req.params.orderId || req.query?.order_id || req.query?.orderId;
         if (!orderId) {
             return res.status(400).json({
                 success: false,
@@ -312,6 +337,12 @@ export const verifyOrder = async (req, res) => {
         if (!isPaid) {
             console.log("[Payment Verification] Order not paid. Status:", uropayStatus);
             const isPending = ["PENDING", "PROCESSING", "CREATED"].includes(finalStatusUpper);
+            if (!isPending && ["FAILED", "CANCELLED", "EXPIRED"].includes(finalStatusUpper)) {
+                await updatePayment(orderId, {
+                    paymentStatus: finalStatusUpper,
+                    updatedAt: new Date()
+                }).catch(() => {});
+            }
             return res.status(200).json({
                 success: false,
                 pending: isPending,

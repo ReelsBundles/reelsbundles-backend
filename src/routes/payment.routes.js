@@ -89,6 +89,12 @@ router.get(
 );
 
 router.get(
+    "/verify",
+    firebaseUserAuth,
+    verifyOrder
+);
+
+router.get(
     "/verify/:orderId",
     firebaseUserAuth,
     verifyOrder

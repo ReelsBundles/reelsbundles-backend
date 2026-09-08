@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { db } from "../config/firebase.js";
+import { db, isFirestoreAvailable, markFirestoreFailure, markFirestoreSuccess } from "../config/firebase.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,8 +76,8 @@ export async function savePayment(
     saveLocalPayments(payments);
 
     // 2. Attempt Firestore sync safely
-    try {
-        if (db) {
+    if (isFirestoreAvailable()) {
+        try {
             await db
                 .collection("payments")
                 .doc(paymentData.orderId)
@@ -87,9 +87,11 @@ export async function savePayment(
                         merge: true
                     }
                 );
+            markFirestoreSuccess();
+        } catch (err) {
+            markFirestoreFailure(err);
+            console.warn("[PAYMENT STORAGE] Firestore savePayment warning (saved locally):", err.message);
         }
-    } catch (err) {
-        console.warn("[PAYMENT STORAGE] Firestore savePayment warning (saved locally):", err.message);
     }
 
     return true;
@@ -111,8 +113,8 @@ export async function getPayment(
 
     }
 
-    try {
-        if (db) {
+    if (isFirestoreAvailable()) {
+        try {
             const doc =
                 await db
                     .collection("payments")
@@ -120,14 +122,16 @@ export async function getPayment(
                     .get();
 
             if (doc.exists) {
+                markFirestoreSuccess();
                 return {
                     id: doc.id,
                     ...doc.data()
                 };
             }
+        } catch (err) {
+            markFirestoreFailure(err);
+            console.warn("[PAYMENT STORAGE] Firestore getPayment warning (fallback to local):", err.message);
         }
-    } catch (err) {
-        console.warn("[PAYMENT STORAGE] Firestore getPayment warning (fallback to local):", err.message);
     }
 
     const localPayments = loadLocalPayments();
@@ -160,8 +164,8 @@ export async function updatePayment(
         saveLocalPayments(payments);
     }
 
-    try {
-        if (db) {
+    if (isFirestoreAvailable()) {
+        try {
             await db
                 .collection("payments")
                 .doc(orderId)
@@ -171,9 +175,11 @@ export async function updatePayment(
                         merge: true
                     }
                 );
+            markFirestoreSuccess();
+        } catch (err) {
+            markFirestoreFailure(err);
+            console.warn("[PAYMENT STORAGE] Firestore updatePayment warning (updated locally):", err.message);
         }
-    } catch (err) {
-        console.warn("[PAYMENT STORAGE] Firestore updatePayment warning (updated locally):", err.message);
     }
 
     return true;
@@ -351,8 +357,8 @@ export async function getUserEntitlement(
 
 
     let snapshotDocs = [];
-    try {
-        if (db) {
+    if (isFirestoreAvailable()) {
+        try {
             const snapshot =
                 await db
                     .collection("payments")
@@ -363,9 +369,11 @@ export async function getUserEntitlement(
                     )
                     .get();
             snapshot.forEach(doc => snapshotDocs.push({ id: doc.id, data: doc.data() || {} }));
+            markFirestoreSuccess();
+        } catch (err) {
+            markFirestoreFailure(err);
+            console.warn("[PAYMENT STORAGE] Firestore getUserEntitlement warning (fallback to local):", err.message);
         }
-    } catch (err) {
-        console.warn("[PAYMENT STORAGE] Firestore getUserEntitlement warning (fallback to local):", err.message);
     }
 
     if (snapshotDocs.length === 0) {
@@ -465,7 +473,7 @@ export async function getUserEntitlement(
 
                 orderId:
                     data.orderId ||
-                    doc.id,
+                    docItem.id,
 
                 bundlePlan,
 
@@ -516,14 +524,23 @@ export async function getUserEntitlement(
         }
     );
 
+    const hasAccess = effectivePlan === "premium" || effectivePlan === "basic";
 
     return {
+
+        hasAccess,
+
+        tier:
+            effectivePlan,
 
         plan:
             effectivePlan,
 
         lifetimeAccess:
-            effectivePlan === "premium" || effectivePlan === "basic",
+            hasAccess,
+
+        ordersCount:
+            purchases.length,
 
         purchases
 
@@ -600,8 +617,8 @@ export async function getPaidPaymentsByUserUid(
     }
 
     let snapshotDocs = [];
-    try {
-        if (db) {
+    if (isFirestoreAvailable()) {
+        try {
             const snapshot =
                 await db
                     .collection("payments")
@@ -612,9 +629,11 @@ export async function getPaidPaymentsByUserUid(
                     )
                     .get();
             snapshot.forEach(doc => snapshotDocs.push({ id: doc.id, data: doc.data() || {} }));
+            markFirestoreSuccess();
+        } catch (err) {
+            markFirestoreFailure(err);
+            console.warn("[PAYMENT STORAGE] Firestore getPaidPaymentsByUserUid warning (fallback to local):", err.message);
         }
-    } catch (err) {
-        console.warn("[PAYMENT STORAGE] Firestore getPaidPaymentsByUserUid warning (fallback to local):", err.message);
     }
 
     if (snapshotDocs.length === 0) {
