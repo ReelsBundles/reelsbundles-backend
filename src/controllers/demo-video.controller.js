@@ -2,6 +2,7 @@ import {
     fetchVideosAsync,
     getActiveVideosAsync,
     addVideo as addVideoService,
+    updateVideo as updateVideoService,
     toggleVideo as toggleVideoService,
     deleteVideo as deleteVideoService
 } from '../services/demo-video-storage.service.js';
@@ -58,6 +59,22 @@ export const toggleVideo = async (req, res) => {
         return res.json({
             success: true,
             message: `Video is now ${updated.active ? 'Active' : 'Inactive'}`,
+            video: updated
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+export const updateVideo = async (req, res) => {
+    try {
+        const updated = await updateVideoService(req.params.id, req.body);
+        return res.json({
+            success: true,
+            message: "Demo video updated successfully!",
             video: updated
         });
     } catch (error) {

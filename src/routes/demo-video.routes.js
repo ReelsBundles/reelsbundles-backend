@@ -4,6 +4,7 @@ import {
     getPublicDemoVideos,
     listAdminVideos,
     addVideo,
+    updateVideo,
     toggleVideo,
     deleteVideo
 } from "../controllers/demo-video.controller.js";
@@ -16,6 +17,7 @@ router.get("/demo/videos", getPublicDemoVideos);
 // Admin endpoints
 router.get("/admin/demo-videos", adminAuth, listAdminVideos);
 router.post("/admin/demo-videos", adminAuth, addVideo);
+router.put("/admin/demo-videos/:id", adminAuth, updateVideo);
 router.put("/admin/demo-videos/:id/toggle", adminAuth, toggleVideo);
 router.delete("/admin/demo-videos/:id", adminAuth, deleteVideo);
 

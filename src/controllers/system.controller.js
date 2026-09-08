@@ -22,7 +22,7 @@ function ensureSettingsFile() {
             showTimer: true,
             testerPasscode: "5796",
             bypassKey: "RB_TESTER_KEY_5796",
-            updatedAt: new Date().toISOString()
+            updatedAt: "1970-01-01T00:00:00.000Z"
         };
         fs.writeFileSync(SETTINGS_FILE, JSON.stringify(initial, null, 2), "utf-8");
     }
@@ -40,7 +40,8 @@ function loadSettingsLocal() {
             expectedBack: null,
             showTimer: true,
             testerPasscode: "5796",
-            bypassKey: "RB_TESTER_KEY_5796"
+            bypassKey: "RB_TESTER_KEY_5796",
+            updatedAt: "1970-01-01T00:00:00.000Z"
         };
     }
 }
@@ -104,18 +105,27 @@ export const getMaintenanceStatus = async (req, res) => {
         const passcode = settings.testerPasscode || "5796";
         const key = settings.bypassKey || `RB_TESTER_KEY_${passcode}`;
 
-        // Check if request is from an authenticated admin
-        const isAdmin = Boolean(req.admin || req.headers.authorization);
+        // Strictly check if request is authenticated as an Admin
+        const isAdmin = Boolean(req.admin && (req.admin.role === "admin" || req.admin.role === "superadmin"));
+
+        // Maintenance is active indefinitely unless an explicit completion date (expectedBack) was configured in the past
+        let isMaintenanceActive = Boolean(settings.maintenance);
+        if (isMaintenanceActive && settings.expectedBack) {
+            const expiryDate = new Date(settings.expectedBack);
+            if (!isNaN(expiryDate.getTime()) && expiryDate.getTime() <= Date.now()) {
+                isMaintenanceActive = false;
+            }
+        }
 
         const responsePayload = {
             success: true,
-            maintenance: Boolean(settings.maintenance),
+            maintenance: isMaintenanceActive,
             message: settings.message || "🛠️ System Maintenance in progress.",
             expectedBack: settings.expectedBack || null,
             showTimer: settings.showTimer !== false
         };
 
-        // Only include testerPasscode and bypassKey if requester is authenticated admin
+        // NEVER expose testerPasscode or bypassKey on public endpoints. Only authenticated admin receives it.
         if (isAdmin) {
             responsePayload.testerPasscode = passcode;
             responsePayload.bypassKey = key;

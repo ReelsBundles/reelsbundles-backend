@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { db } from '../config/firebase.js';
+import { db, isFirestoreAvailable, markFirestoreFailure, markFirestoreSuccess } from '../config/firebase.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -47,21 +47,26 @@ export async function fetchVideosAsync() {
     let items = getAllVideos();
 
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             const snapshot = await db.collection("demo_videos").get();
+            markFirestoreSuccess();
             if (!snapshot.empty) {
                 const remote = [];
                 snapshot.forEach(doc => remote.push({ id: doc.id, ...doc.data() }));
 
                 remote.forEach(rItem => {
-                    if (!items.some(lItem => lItem.id === rItem.id || (lItem.videoId && lItem.videoId === rItem.videoId))) {
+                    const existingIdx = items.findIndex(lItem => lItem.id === rItem.id || (lItem.videoId && lItem.videoId === rItem.videoId));
+                    if (existingIdx === -1) {
                         items.push(rItem);
+                    } else {
+                        items[existingIdx] = { ...items[existingIdx], ...rItem };
                     }
                 });
                 saveVideos(items);
             }
         }
     } catch (e) {
+        markFirestoreFailure(e);
         console.warn("[DEMO VIDEOS] Firestore sync warning:", e?.message);
     }
 
@@ -103,14 +108,49 @@ export async function addVideo(data) {
     saveVideos(videos);
 
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             await db.collection("demo_videos").doc(newVideo.id).set(newVideo);
+            markFirestoreSuccess();
         }
     } catch (e) {
+        markFirestoreFailure(e);
         console.warn("[DEMO VIDEO] Firestore write warning:", e?.message);
     }
 
     return newVideo;
+}
+
+export async function updateVideo(id, data) {
+    const videos = getAllVideos();
+    const index = videos.findIndex(v => v.id === id);
+    if (index === -1) throw new Error("Video not found");
+
+    const videoId = data.youtubeUrl || data.videoId ? extractYouTubeId(data.youtubeUrl || data.videoId) : videos[index].videoId;
+    const isShort = data.videoType ? String(data.videoType).toLowerCase() === "short" : videos[index].videoType === "short";
+
+    videos[index] = {
+        ...videos[index],
+        title: data.title !== undefined ? String(data.title).trim() : videos[index].title,
+        videoId: videoId,
+        youtubeUrl: data.youtubeUrl !== undefined ? String(data.youtubeUrl).trim() : videos[index].youtubeUrl,
+        videoType: isShort ? "short" : "video",
+        category: data.category !== undefined ? String(data.category).trim() : videos[index].category,
+        active: data.active !== undefined ? Boolean(data.active) : videos[index].active,
+        updatedAt: new Date().toISOString()
+    };
+
+    saveVideos(videos);
+
+    try {
+        if (isFirestoreAvailable()) {
+            await db.collection("demo_videos").doc(id).set(videos[index], { merge: true });
+            markFirestoreSuccess();
+        }
+    } catch (e) {
+        markFirestoreFailure(e);
+    }
+
+    return videos[index];
 }
 
 export async function toggleVideo(id) {
@@ -118,13 +158,17 @@ export async function toggleVideo(id) {
     const video = videos.find(v => v.id === id);
     if (!video) throw new Error("Video not found");
     video.active = !video.active;
+    video.updatedAt = new Date().toISOString();
     saveVideos(videos);
 
     try {
-        if (db) {
-            await db.collection("demo_videos").doc(id).update({ active: video.active });
+        if (isFirestoreAvailable()) {
+            await db.collection("demo_videos").doc(id).update({ active: video.active, updatedAt: video.updatedAt });
+            markFirestoreSuccess();
         }
-    } catch (e) {}
+    } catch (e) {
+        markFirestoreFailure(e);
+    }
 
     return video;
 }
@@ -137,10 +181,13 @@ export async function deleteVideo(id) {
     saveVideos(videos);
 
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             await db.collection("demo_videos").doc(id).delete();
+            markFirestoreSuccess();
         }
-    } catch (e) {}
+    } catch (e) {
+        markFirestoreFailure(e);
+    }
 
     return true;
 }

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { db } from "../config/firebase.js";
+import { db, isFirestoreAvailable, markFirestoreFailure, markFirestoreSuccess } from "../config/firebase.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,8 +43,9 @@ export function saveImportantAlerts(alerts) {
 export async function fetchImportantAlertsAsync() {
     let items = loadImportantAlerts();
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             const snapshot = await db.collection("important_alerts").get();
+            markFirestoreSuccess();
             if (!snapshot.empty) {
                 const remote = [];
                 snapshot.forEach(doc => remote.push({ id: doc.id, ...doc.data() }));
@@ -61,7 +62,8 @@ export async function fetchImportantAlertsAsync() {
             }
         }
     } catch (e) {
-        // Fallback gracefully to local disk file if Firestore is unreachable
+        markFirestoreFailure(e);
+        console.warn("[ALERT STORAGE] Firestore sync warning:", e?.message);
     }
     return items;
 }
@@ -82,6 +84,7 @@ export async function createImportantAlert(data) {
         id: newId,
         title: String(data.title || "Important Alert").trim(),
         message: String(data.message || "").trim(),
+        level: data.level || "warning",
         active: data.active !== false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -90,11 +93,13 @@ export async function createImportantAlert(data) {
     saveImportantAlerts(list);
 
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             await db.collection("important_alerts").doc(newAlert.id).set(newAlert);
+            markFirestoreSuccess();
         }
     } catch (e) {
-        // Local persistence succeeded
+        markFirestoreFailure(e);
+        console.warn("[ALERT STORAGE] Firestore write warning:", e?.message);
     }
 
     return newAlert;
@@ -110,6 +115,7 @@ export async function updateImportantAlert(id, data) {
         ...list[index],
         title: data.title !== undefined ? String(data.title).trim() : list[index].title,
         message: data.message !== undefined ? String(data.message).trim() : list[index].message,
+        level: data.level !== undefined ? data.level : list[index].level,
         active: data.active !== undefined ? Boolean(data.active) : list[index].active,
         updatedAt: new Date().toISOString()
     };
@@ -117,11 +123,12 @@ export async function updateImportantAlert(id, data) {
     saveImportantAlerts(list);
 
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             await db.collection("important_alerts").doc(id).set(list[index], { merge: true });
+            markFirestoreSuccess();
         }
     } catch (e) {
-        // Local persistence succeeded
+        markFirestoreFailure(e);
     }
 
     return list[index];
@@ -136,11 +143,12 @@ export async function deleteImportantAlert(id) {
     saveImportantAlerts(list);
 
     try {
-        if (db) {
+        if (isFirestoreAvailable()) {
             await db.collection("important_alerts").doc(id).delete();
+            markFirestoreSuccess();
         }
     } catch (e) {
-        // Local persistence succeeded
+        markFirestoreFailure(e);
     }
 
     return true;
