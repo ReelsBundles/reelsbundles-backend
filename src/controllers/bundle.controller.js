@@ -16,9 +16,22 @@ import {
     validateBundle
 } from "../validators/bundle.validator.js";
 
+function formatErrorMessage(err) {
+    const msg = String(err?.message || err || "Internal server error");
+    if (
+        msg.includes("16 UNAUTHENTICATED") ||
+        msg.includes("OAuth 2") ||
+        msg.includes("invalid_grant") ||
+        msg.includes("UNAUTHENTICATED")
+    ) {
+        return "Database service authentication unavailable. Operating in resilient storage mode.";
+    }
+    return msg;
+}
+
 /* ===========================================
    GET ALL
-=========================================== */
+========================================== */
 
 export async function listBundles(req, res) {
 
@@ -43,7 +56,7 @@ export async function listBundles(req, res) {
 
     return res.status(500).json({
         success: false,
-        message: err.message
+        message: formatErrorMessage(err)
     });
 
 }
@@ -92,7 +105,7 @@ catch (err) {
 
     return res.status(500).json({
         success: false,
-        message: err.message
+        message: formatErrorMessage(err)
     });
 
 }
@@ -142,7 +155,7 @@ catch (err) {
 
     return res.status(500).json({
         success: false,
-        message: err.message
+        message: formatErrorMessage(err)
     });
 
 }
@@ -196,7 +209,7 @@ catch (err) {
 
     return res.status(500).json({
         success: false,
-        message: err.message
+        message: formatErrorMessage(err)
     });
 
 }
@@ -231,7 +244,7 @@ catch (err) {
 
     return res.status(500).json({
         success: false,
-        message: err.message
+        message: formatErrorMessage(err)
     });
 
 }
@@ -266,7 +279,7 @@ export async function toggleBundleStatus(req, res) {
 
     return res.status(500).json({
         success: false,
-        message: err.message
+        message: formatErrorMessage(err)
     });
 
 }
@@ -305,7 +318,7 @@ export async function searchBundle(req, res) {
 
     return res.status(500).json({
         success: false,
-        message: err.message
+        message: formatErrorMessage(err)
     });
 
 }
@@ -339,7 +352,7 @@ export async function bundleStats(req, res) {
 
     return res.status(500).json({
         success: false,
-        message: err.message
+        message: formatErrorMessage(err)
     });
 
 }
@@ -414,7 +427,7 @@ export async function addBulkBundles(req, res) {
         console.error("Bulk Bundle Creation Error:", err);
         return res.status(500).json({
             success: false,
-            message: err.message || "Failed to create bundles in bulk."
+            message: formatErrorMessage(err)
         });
     }
 }
@@ -434,7 +447,7 @@ export async function removeAllBundles(req, res) {
         console.error("Remove All Bundles Error:", err);
         return res.status(500).json({
             success: false,
-            message: err.message || "Failed to delete all bundles."
+            message: formatErrorMessage(err)
         });
     }
 }

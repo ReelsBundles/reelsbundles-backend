@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { db } from "../config/firebase.js";
+import { db, isFirestoreAvailable, markFirestoreFailure, markFirestoreSuccess } from "../config/firebase.js";
 
 import {
     encrypt,
@@ -90,8 +90,8 @@ async function slugExists(
     ignoreId = null
 ) {
 
-    try {
-        if (collection) {
+    if (isFirestoreAvailable() && collection) {
+        try {
             const snapshot =
                 await collection
                     .where(
@@ -101,15 +101,17 @@ async function slugExists(
                     )
                     .limit(1)
                     .get();
+            markFirestoreSuccess();
 
             if (!snapshot.empty) {
                 if (!ignoreId) return true;
                 const doc = snapshot.docs[0];
                 return doc.id !== ignoreId;
             }
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn("[slugExists] Firestore query warning:", e.message);
         }
-    } catch (e) {
-        console.warn("[slugExists] Firestore query warning:", e.message);
     }
 
     const localBundles = loadLocalBundles();
@@ -271,16 +273,18 @@ function mapBundle(doc) {
 
 export async function getBundles() {
     let snapshot = null;
-    try {
-        if (collection) {
+    if (isFirestoreAvailable() && collection) {
+        try {
             try {
                 snapshot = await collection.orderBy("name").get();
             } catch (e) {
                 snapshot = await collection.get();
             }
+            markFirestoreSuccess();
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn("[getBundles] Firestore query failed (fallback to local bundles):", e.message);
         }
-    } catch (e) {
-        console.warn("[getBundles] Firestore query failed (fallback to local bundles):", e.message);
     }
 
     if (snapshot && !snapshot.empty) {
@@ -316,19 +320,21 @@ export async function getBundle(
 
     }
 
-    try {
-        if (collection) {
+    if (isFirestoreAvailable() && collection) {
+        try {
             const doc =
                 await collection
                     .doc(id)
                     .get();
+            markFirestoreSuccess();
 
             if (doc.exists) {
                 return mapBundle(doc);
             }
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn(`[getBundle] Firestore get failed for ${id} (fallback to local):`, e.message);
         }
-    } catch (e) {
-        console.warn(`[getBundle] Firestore get failed for ${id} (fallback to local):`, e.message);
     }
 
     const localBundles = loadLocalBundles();
@@ -358,16 +364,18 @@ export async function createBundle(data) {
     bundle.createdAt = now();
 
     let docId = "bnd_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6);
-    try {
-        if (collection) {
+    if (isFirestoreAvailable() && collection) {
+        try {
             const doc =
                 await collection.add(
                     bundle
                 );
+            markFirestoreSuccess();
             docId = doc.id;
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn("[createBundle] Firestore add warning (saved locally):", e.message);
         }
-    } catch (e) {
-        console.warn("[createBundle] Firestore add warning (saved locally):", e.message);
     }
 
     const created = {
@@ -427,16 +435,18 @@ export async function updateBundle(
         saveLocalBundles(localBundles);
     }
 
-    try {
-        if (collection) {
+    if (isFirestoreAvailable() && collection) {
+        try {
             await collection
                 .doc(id)
                 .update(
                     bundle
                 );
+            markFirestoreSuccess();
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn(`[updateBundle] Firestore update failed for ${id} (updated locally):`, e.message);
         }
-    } catch (e) {
-        console.warn(`[updateBundle] Firestore update failed for ${id} (updated locally):`, e.message);
     }
 
     return {
@@ -489,7 +499,32 @@ export async function replaceBundleLinks(
         throw new Error("At least one Google Drive Folder Link is required.");
     }
 
-    await collection.doc(id).update(update);
+    const localBundles = loadLocalBundles();
+    const idx = localBundles.findIndex(b => String(b.id) === String(id));
+    if (idx >= 0) {
+        if (update["basic.folderId"]) {
+            localBundles[idx].basic = localBundles[idx].basic || {};
+            localBundles[idx].basic.folderId = update["basic.folderId"];
+            localBundles[idx].basic.folderLink = basicLink;
+        }
+        if (update["premium.folderId"]) {
+            localBundles[idx].premium = localBundles[idx].premium || {};
+            localBundles[idx].premium.folderId = update["premium.folderId"];
+            localBundles[idx].premium.folderLink = premiumLink;
+        }
+        localBundles[idx].updatedAt = update.updatedAt;
+        saveLocalBundles(localBundles);
+    }
+
+    if (isFirestoreAvailable() && collection) {
+        try {
+            await collection.doc(id).update(update);
+            markFirestoreSuccess();
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn(`[replaceBundleLinks] Firestore update failed for ${id}:`, e.message);
+        }
+    }
 }
 
 /* ==========================================================
@@ -509,20 +544,32 @@ export async function updateBundleStatus(
 
     }
 
+    const localBundles = loadLocalBundles();
+    const idx = localBundles.findIndex(b => String(b.id) === String(id));
+    if (idx >= 0) {
+        localBundles[idx].active = Boolean(active);
+        localBundles[idx].updatedAt = now();
+        saveLocalBundles(localBundles);
+    }
 
-    await collection
-        .doc(id)
-        .update({
-
-            active:
-                Boolean(
-                    active
-                ),
-
-            updatedAt:
-                now()
-
-        });
+    if (isFirestoreAvailable() && collection) {
+        try {
+            await collection
+                .doc(id)
+                .update({
+                    active:
+                        Boolean(
+                            active
+                        ),
+                    updatedAt:
+                        now()
+                });
+            markFirestoreSuccess();
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn(`[updateBundleStatus] Firestore update failed for ${id}:`, e.message);
+        }
+    }
 
 }
 
@@ -541,14 +588,22 @@ export async function bundleExists(
 
     }
 
+    if (isFirestoreAvailable() && collection) {
+        try {
+            const doc =
+                await collection
+                    .doc(id)
+                    .get();
+            markFirestoreSuccess();
+            return doc.exists;
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn(`[bundleExists] Firestore get failed for ${id}:`, e.message);
+        }
+    }
 
-    const doc =
-        await collection
-            .doc(id)
-            .get();
-
-
-    return doc.exists;
+    const localBundles = loadLocalBundles();
+    return localBundles.some(b => String(b.id) === String(id) || String(b.slug) === String(id));
 
 }
 
@@ -572,14 +627,16 @@ export async function deleteBundle(
     const localBundles = loadLocalBundles().filter(b => String(b.id) !== String(id));
     saveLocalBundles(localBundles);
 
-    try {
-        if (collection) {
+    if (isFirestoreAvailable() && collection) {
+        try {
             await collection
                 .doc(id)
                 .delete();
+            markFirestoreSuccess();
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn(`[deleteBundle] Firestore delete failed for ${id}:`, e.message);
         }
-    } catch (e) {
-        console.warn(`[deleteBundle] Firestore delete failed for ${id}:`, e.message);
     }
 
     return true;
@@ -613,8 +670,8 @@ export async function toggleBundle(
         saveLocalBundles(localBundles);
     }
 
-    try {
-        if (collection) {
+    if (isFirestoreAvailable() && collection) {
+        try {
             const doc =
                 await collection
                     .doc(id)
@@ -629,10 +686,12 @@ export async function toggleBundle(
                         active: newStatus,
                         updatedAt: now()
                     });
+                markFirestoreSuccess();
             }
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn(`[toggleBundle] Firestore toggle failed for ${id}:`, e.message);
         }
-    } catch (e) {
-        console.warn(`[toggleBundle] Firestore toggle failed for ${id}:`, e.message);
     }
 
     return newStatus;
@@ -820,37 +879,45 @@ export async function getBundlesByPage(
     }
 
 
-    const snapshot =
-        await collection
-            .where(
-                "page",
-                "==",
-                requestedPage
-            )
-            .where(
-                "active",
-                "==",
-                true
-            )
-            .get();
+    if (isFirestoreAvailable() && collection) {
+        try {
+            const snapshot =
+                await collection
+                    .where(
+                        "page",
+                        "==",
+                        requestedPage
+                    )
+                    .where(
+                        "active",
+                        "==",
+                        true
+                    )
+                    .get();
+            markFirestoreSuccess();
 
-
-    const bundles = [];
-
-
-    snapshot.forEach(
-        doc => {
-
-            bundles.push(
-                mapBundle(doc)
+            const bundles = [];
+            snapshot.forEach(
+                doc => {
+                    try {
+                        bundles.push(
+                            mapBundle(doc)
+                        );
+                    } catch (e) {
+                        bundles.push({ id: doc.id, ...doc.data() });
+                    }
+                }
             );
 
+            return bundles;
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn(`[getBundlesByPage] Firestore query failed for page ${requestedPage}:`, e.message);
         }
-    );
+    }
 
-
-    return bundles;
-
+    const allBundles = await getBundles();
+    return allBundles.filter(b => Number(b.page) === requestedPage && b.active === true);
 }
 
 
@@ -1082,16 +1149,30 @@ export async function createBulkBundles(items) {
 ========================================================== */
 
 export async function deleteAllBundles() {
-    const snapshot = await collection.get();
-    if (snapshot.empty) {
-        return { deletedCount: 0 };
+    let deletedCount = 0;
+    if (isFirestoreAvailable() && collection) {
+        try {
+            const snapshot = await collection.get();
+            markFirestoreSuccess();
+            if (!snapshot.empty) {
+                const batch = db.batch();
+                snapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+                deletedCount = snapshot.size;
+            }
+        } catch (e) {
+            markFirestoreFailure(e);
+            console.warn("[deleteAllBundles] Firestore delete batch failed:", e.message);
+        }
     }
 
-    const batch = db.batch();
-    snapshot.docs.forEach(doc => {
-        batch.delete(doc.ref);
-    });
+    const localBundles = loadLocalBundles();
+    if (deletedCount === 0) {
+        deletedCount = localBundles.length;
+    }
+    saveLocalBundles([]);
 
-    await batch.commit();
-    return { deletedCount: snapshot.size };
+    return { deletedCount };
 }
