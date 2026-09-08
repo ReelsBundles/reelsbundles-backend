@@ -1,9 +1,9 @@
 {
   "maintenance": false,
-  "message": "System operational.",
+  "message": "All systems operational",
   "expectedBack": null,
-  "showTimer": true,
+  "showTimer": false,
   "testerPasscode": "5796",
   "bypassKey": "RB_TESTER_KEY_5796",
-  "updatedAt": "2026-09-06T10:17:36.601Z"
+  "updatedAt": "2026-09-08T12:08:49.246Z"
 }

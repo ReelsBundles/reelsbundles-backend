@@ -1,18 +1,31 @@
-import { db } from "../config/firebase.js";
+import { db, isFirestoreAvailable, markFirestoreFailure, markFirestoreSuccess } from "../config/firebase.js";
 import { loadLocalPayments } from "./payment-storage.service.js";
 import { getLocalDownloadLogs } from "./download-log.service.js";
 import { loadLocalBundles } from "./bundle.service.js";
 import { getAllUsers } from "./user-storage.service.js";
 
+let cachedStats = null;
+let lastStatsFetch = 0;
+const STATS_CACHE_TTL = 5000; // 5 seconds memory cache
+
+export function invalidateDashboardStatsCache() {
+    cachedStats = null;
+    lastStatsFetch = 0;
+}
+
 export async function getDashboardStats() {
+    if (cachedStats && (Date.now() - lastStatsFetch < STATS_CACHE_TTL)) {
+        return cachedStats;
+    }
+
     let payments = [];
     let downloads = [];
     let bundles = [];
     let users = [];
 
     let fetchedFromDb = false;
-    try {
-        if (db) {
+    if (db && isFirestoreAvailable()) {
+        try {
             const paymentsRef = db.collection("payments");
             const downloadsRef = db.collection("download_logs");
             const bundlesRef = db.collection("bundles");
@@ -24,10 +37,10 @@ export async function getDashboardStats() {
                 bundlesSnap,
                 usersSnap
             ] = await Promise.all([
-                paymentsRef.get(),
-                downloadsRef.get(),
-                bundlesRef.get(),
-                usersRef.get()
+                paymentsRef.limit(50).get(),
+                downloadsRef.limit(50).get(),
+                bundlesRef.limit(50).get(),
+                usersRef.limit(50).get()
             ]);
 
             payments = paymentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -35,9 +48,11 @@ export async function getDashboardStats() {
             bundles = bundlesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             users = usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             fetchedFromDb = true;
+            markFirestoreSuccess();
+        } catch (err) {
+            markFirestoreFailure(err);
+            console.warn("[DASHBOARD SERVICE] Firestore getDashboardStats warning (fallback to local):", err.message);
         }
-    } catch (err) {
-        console.warn("[DASHBOARD SERVICE] Firestore getDashboardStats warning (fallback to local):", err.message);
     }
 
     if (!fetchedFromDb || payments.length === 0) {
@@ -107,7 +122,7 @@ export async function getDashboardStats() {
         });
     });
 
-    return {
+    const result = {
         orders: payments.length,
         paidOrders: paidOrdersCount,
         revenue,
@@ -117,4 +132,9 @@ export async function getDashboardStats() {
         recentOrders: recentOrdersList,
         recentDownloads: recentDownloadsList
     };
+
+    cachedStats = result;
+    lastStatsFetch = Date.now();
+
+    return result;
 }

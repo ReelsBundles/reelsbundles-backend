@@ -583,18 +583,20 @@ app.use(
 ========================================================== */
 
 app.get(
-    "/",
+    ["/", "/health", "/api/health"],
     (req, res) => {
 
         return res.status(200).json({
 
             success: true,
 
+            status: "healthy",
+
             message:
                 "ReelsBundles Backend Running",
 
             version:
-                "A3",
+                SYSTEM_VERSION || "2.0.0",
 
             service:
                 "reelsbundles-backend"

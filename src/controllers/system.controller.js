@@ -61,12 +61,20 @@ function parseSafeDate(val) {
     }
 }
 
-async function syncWithFirestore(localSettings) {
+let lastSyncTime = 0;
+const SYNC_CACHE_TTL_MS = 5000; // 5s throttle for read sync
+
+async function syncWithFirestore(localSettings, forceRefresh = false) {
     if (!isFirestoreAvailable()) return localSettings;
+    const now = Date.now();
+    if (!forceRefresh && now - lastSyncTime < SYNC_CACHE_TTL_MS) {
+        return localSettings;
+    }
     try {
         const docRef = db.collection("system_settings").doc("maintenance");
         const docSnap = await docRef.get();
         markFirestoreSuccess();
+        lastSyncTime = Date.now();
         if (docSnap.exists) {
             const remoteData = docSnap.data() || {};
             const localTime = new Date(localSettings.updatedAt || 0).getTime();
@@ -108,14 +116,9 @@ export const getMaintenanceStatus = async (req, res) => {
         // Strictly check if request is authenticated as an Admin
         const isAdmin = Boolean(req.admin && (req.admin.role === "admin" || req.admin.role === "superadmin"));
 
-        // Maintenance is active indefinitely unless an explicit completion date (expectedBack) was configured in the past
-        let isMaintenanceActive = Boolean(settings.maintenance);
-        if (isMaintenanceActive && settings.expectedBack) {
-            const expiryDate = new Date(settings.expectedBack);
-            if (!isNaN(expiryDate.getTime()) && expiryDate.getTime() <= Date.now()) {
-                isMaintenanceActive = false;
-            }
-        }
+        // Maintenance is STRICTLY determined by Admin setting.
+        // No automatic expiry / auto-off: stays ON indefinitely until Admin explicitly turns it OFF.
+        const isMaintenanceActive = Boolean(settings.maintenance);
 
         const responsePayload = {
             success: true,
@@ -164,6 +167,7 @@ export const updateMaintenanceStatus = async (req, res) => {
 
         // Save locally first
         saveSettingsLocal(updated);
+        lastSyncTime = Date.now();
 
         // Save to Firestore Cloud Database
         try {
@@ -207,6 +211,7 @@ export const updateMaintenancePasscode = async (req, res) => {
         };
 
         saveSettingsLocal(updated);
+        lastSyncTime = Date.now();
 
         if (isFirestoreAvailable()) {
             try {

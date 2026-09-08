@@ -259,7 +259,7 @@ async function runFinalProductionPersistenceTests() {
             assert.strictEqual(pubData.testerPasscode, undefined); // Secure!
         });
 
-        await test("2.4 Maintenance: Explicit expectedBack in the past auto-expires maintenance", async () => {
+        await test("2.4 Maintenance: Explicit expectedBack in the past does NOT auto-expire (remains ON indefinitely until Admin turns OFF)", async () => {
             const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
             await fetch(`${baseUrl}/api/admin/system/maintenance`, {
                 method: "PUT",
@@ -275,8 +275,9 @@ async function runFinalProductionPersistenceTests() {
 
             const pubRes = await fetch(`${baseUrl}/api/system/maintenance`);
             const pubData = await pubRes.json();
-            // Since expected completion date was reached in the past, it auto-expires
-            assert.strictEqual(pubData.maintenance, false);
+            // Expected completion date is strictly informational; maintenance stays ON until Admin turns OFF
+            assert.strictEqual(pubData.maintenance, true);
+            assert.strictEqual(pubData.expectedBack, pastDate);
         });
 
         await test("2.5 Maintenance: Explicit expectedBack in the future remains ACTIVE", async () => {
